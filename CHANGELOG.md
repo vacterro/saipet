@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.5.0 (2026-08-02)
+- Fixture-recorded test coverage for `sources/reddit.py` (`tests/test_reddit_source.py`): query construction (every symptom OR-joined) and Candidate field mapping are now regression-tested without praw, network, or credentials.
+
 ## v0.4.0 (2026-08-02)
 - No-link mode wired end-to-end: the interactive review step now asks whether to mention SAIPEN at all, so a relevant-but-not-appropriate-for-promo thread can still get a genuinely helpful, link-free reply.
 

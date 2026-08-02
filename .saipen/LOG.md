@@ -30,3 +30,9 @@
 - 02.08.26 19:57 [E-029] [parent: E-028] [T-004] RUN: ship v0.4.0 -> skipped publish (no origin, standing user deferral).
 - 02.08.26 19:57 [E-030] [parent: E-029] [T-004] DEC: goal_tickets 2->3
 - 02.08.26 19:58 [E-031] [parent: E-030] [T-005] DEC: SHIP -> DONE (T-004). DONE -> SCOUT; claim T-005; owner claude-opus.
+- 02.08.26 20:00 [E-032] [parent: E-031] [T-005] RUN: SCOUT -- `RedditSource` only touches `.subreddit(name).search(query, sort, limit)` and 5 post attrs; a fake shaped to exactly that surface is enough, no real praw needed. SCOUT -> BUILD.
+- 02.08.26 20:05 [E-033] [parent: E-032] [T-005] RUN: BUILD -> tests/test_reddit_source.py: `_client()` monkeypatched per-instance to a fake reddit/subreddit/post trio; asserts every symptom OR-joined into the query, all 5 Candidate fields map correctly, missing `selftext` (link posts) defaults to empty body, and every configured subreddit gets queried. 3 new tests. 21/21 total green.
+- 02.08.26 20:06 [E-034] [parent: E-033] [T-005] DEC: REVIEW pass 1 -- no P0/P1. DEC: SHIP.
+- 02.08.26 20:07 [E-035] [parent: E-034] [T-005] RUN: ship v0.5.0 -> skipped publish (no origin, standing user deferral).
+- 02.08.26 20:07 [E-036] [parent: E-035] [T-005] DEC: goal_tickets 3->4
+- 02.08.26 20:08 [E-037] [parent: E-036] [T-006] DEC: SHIP -> DONE (T-005). DONE -> SCOUT; claim T-006; owner claude-opus.
