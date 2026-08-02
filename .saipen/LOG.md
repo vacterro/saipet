@@ -1,0 +1,5 @@
+# Log
+- 02.08.26 16:10 [E-001] DEC: bootstrap SAIPEN for project SAIPET -- goal: internet opportunity-scout for SAIPEN (Reddit first), symptom-based search not brand search, relevance-score gates, solve-first draft, mandatory human-approve, permitted-API-only, no auto-post, source-agnostic for future platforms. Spec inherited from T-429 on the parent SAIPEN board.
+- 02.08.26 16:10 [E-002] [parent: E-001] RUN: PLAN -- ticketed T-001 (MVP: scorer + Reddit fetch + review-queue draft, human-approve gate, no auto-post) at front of TODO.
+- 02.08.26 16:10 [E-003] [parent: E-002] [T-001] DEC: PLAN -> SCOUT; claim T-001; owner claude-opus.
+- 02.08.26 16:20 [E-004] [parent: E-003] [T-001] RUN: SCOUT -- Reddit free tier 100 QPM w/ OAuth script app, non-commercial only, no auto-post/vote-manipulation/misrepresentation (Responsible Builder Policy); human posts manually so SAIPET never touches a submit/comment endpoint and never needs the `[App]` tag. Live fetch needs user-owned OAuth app (client_id/secret) -- until given, `sources/reddit.py` builds against a local fixture. No existing code/conventions in this empty repo to match. KNOWLEDGE/reddit-access.md written.

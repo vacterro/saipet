@@ -1,0 +1,6 @@
+# Reddit access constraints (T-001 SCOUT finding, 2026-08-02)
+
+- Free tier: non-commercial only, 100 queries/min per OAuth client (10/min unauthenticated). Source: Reddit API pricing/rate-limit coverage, Aug 2026.
+- Responsible Builder Policy (2026): no vote/karma manipulation, no automated posting/commenting/DM spam, no misrepresenting how/why data is accessed, no multi-account, no circumventing Reddit's own bot labeling.
+- Since 2026-03-31 Reddit shows an `[App]` tag on accounts that post/comment via automation. SAIPET's design sidesteps this entirely: SAIPET only reads (search/fetch) and drafts text. The human account posts the approved draft manually through the normal Reddit UI -- no code path ever calls a submit/comment endpoint, so there is no automated posting account to label in the first place.
+- Registration needed before any live fetch: a "script" type app at reddit.com/prefs/apps (client_id + client_secret), owned by the user's own Reddit account. Not something this agent can do -- requires the user's login. Until provided, `sources/reddit.py` must work against a local fixture/mock so the rest of the pipeline (scorer, draft, review queue) is buildable and testable without live credentials.
