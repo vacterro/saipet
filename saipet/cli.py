@@ -6,6 +6,7 @@ the human to paste into Reddit themselves.
 
 from saipet.config import SYMPTOMS
 from saipet.draft import build_draft
+from saipet.policy import is_subreddit_allowed
 from saipet.review import ReviewItem, ReviewQueue
 from saipet.scorer import gate, score
 from saipet.signals import extract_signals
@@ -28,6 +29,8 @@ def scout(source: Source, signal_fn, seen: SeenStore | None = None) -> ReviewQue
             if seen.has(candidate.source, candidate.id):
                 continue
             seen.mark(candidate.source, candidate.id)
+        if not is_subreddit_allowed(candidate.subreddit):
+            continue
         relevance_score = score(signal_fn(candidate))
         band = gate(relevance_score)
         if band == "ignore":

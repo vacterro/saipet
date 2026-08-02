@@ -39,6 +39,11 @@ AUDIENCE_CUES = ["ai agent", "llm", "gpt", "claude", "chatgpt", "copilot", "auto
 WORKFLOW_CUES = ["workflow", "pipeline", "automation", "ci/cd", "script", "orchestrat"]
 PROTOCOL_CUES = ["protocol", "framework", "spec", "standard", "architecture"]
 
+# Per-subreddit self-promo/bot-rule policy (T-006). Default-deny: a subreddit
+# not listed here never reaches the review queue. Add a subreddit only after
+# actually reading its rules, per the user's own spec.
+SUBREDDIT_ALLOWLIST: set[str] = set()
+
 # Phrases suggesting the thread already has a fix -- penalizes already_solved.
 SOLVED_MARKERS = [
     "solved:",

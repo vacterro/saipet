@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.6.0 (2026-08-02)
+- Per-subreddit policy gate (`saipet/policy.py`, `config.SUBREDDIT_ALLOWLIST`): default-deny, so a candidate from a subreddit nobody has explicitly allowed (after reading its rules) never reaches the review queue.
+
 ## v0.5.0 (2026-08-02)
 - Fixture-recorded test coverage for `sources/reddit.py` (`tests/test_reddit_source.py`): query construction (every symptom OR-joined) and Candidate field mapping are now regression-tested without praw, network, or credentials.
 

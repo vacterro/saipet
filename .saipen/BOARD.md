@@ -1,10 +1,10 @@
 # Board
 ## DOING
-- [/] T-006 [P2] Per-subreddit policy gate: user's spec says always check the target sub's own rules (self-promo/bot rules vary a lot) before a draft is ever surfaced for approve. Minimal version: a local allow/deny list per subreddit (`config.py` or a small YAML) checked before a candidate is added to the review queue, defaulting to deny for unlisted subs. | owner: claude-opus | claim_time: 2026-08-02T20:08:00Z | verify: a candidate from a denied/unlisted subreddit never reaches ReviewQueue; one from an allowed sub does
 
 ## TODO
 
 ## DONE
+- [x] T-006 [P2] Per-subreddit policy gate: `config.SUBREDDIT_ALLOWLIST` (empty by default) + `saipet/policy.py`, checked in `cli.scout()` right after the seen-gate, before scoring/queueing. Default-deny. | review_passes: 1 | verify: PASS -- 24/24 tests. Shipped v0.6.0, local-only
 - [x] T-005 [P2] Fixture-recorded Reddit integration test: `tests/test_reddit_source.py` monkeypatches `RedditSource._client()` to a fake praw-shaped reddit/subreddit/post trio; covers query OR-join, field mapping, missing-selftext default, multi-subreddit fanout. | review_passes: 1 | verify: PASS -- 21/21 tests. Shipped v0.5.0, local-only
 - [x] T-004 [P2] No-link mode wired end-to-end: `run_interactive` (injectable `input_fn`/`print_fn`) asks per-item whether to mention SAIPEN, passes the choice into `build_draft`. | review_passes: 1 | verify: PASS -- 18/18 tests. Shipped v0.4.0, local-only
 - [x] T-003 [P1] Seen-thread persistence: `saipet/store.py`'s `SeenStore` (local JSON) wired into `cli.scout()`, checked/marked for every fetched candidate regardless of gate band. | review_passes: 1 | verify: PASS -- 16/16 tests, both ticket criteria covered directly (`tests/test_scout_dedup.py`). Shipped v0.3.0, local-only
