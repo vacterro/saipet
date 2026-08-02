@@ -8,6 +8,7 @@ from saipet.config import SYMPTOMS
 from saipet.draft import build_draft
 from saipet.review import ReviewItem, ReviewQueue
 from saipet.scorer import gate, score
+from saipet.signals import extract_signals
 from saipet.sources.base import FixtureSource, Source
 
 
@@ -53,7 +54,7 @@ def run_interactive(queue: ReviewQueue) -> None:
 def main() -> None:
     print(f"symptom vocabulary: {', '.join(SYMPTOMS)}")
     print("No live source wired yet (needs REDDIT_CLIENT_ID/SECRET) -- using empty fixture.")
-    run_interactive(scout(FixtureSource([]), signal_fn=lambda c: {}))
+    run_interactive(scout(FixtureSource([]), signal_fn=extract_signals))
 
 
 if __name__ == "__main__":

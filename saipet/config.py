@@ -31,3 +31,22 @@ WEIGHTS = {
 
 GATE_IGNORE_BELOW = 60
 GATE_PRIORITIZE_AT = 80
+
+# Cue words for the three secondary fit signals (T-002). Keyword-based on
+# purpose: cheap, explainable, and replaceable by a real classifier later
+# without changing scorer.py's contract.
+AUDIENCE_CUES = ["ai agent", "llm", "gpt", "claude", "chatgpt", "copilot", "autonomous agent"]
+WORKFLOW_CUES = ["workflow", "pipeline", "automation", "ci/cd", "script", "orchestrat"]
+PROTOCOL_CUES = ["protocol", "framework", "spec", "standard", "architecture"]
+
+# Phrases suggesting the thread already has a fix -- penalizes already_solved.
+SOLVED_MARKERS = [
+    "solved:",
+    "resolved:",
+    "already fixed",
+    "found a solution",
+    "found the fix",
+    "closing this thread",
+    "edit: fixed",
+    "update: fixed",
+]
