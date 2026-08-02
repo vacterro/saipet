@@ -10,15 +10,24 @@ from saipet.review import ReviewItem, ReviewQueue
 from saipet.scorer import gate, score
 from saipet.signals import extract_signals
 from saipet.sources.base import FixtureSource, Source
+from saipet.store import SeenStore
 
 
-def scout(source: Source, signal_fn) -> ReviewQueue:
+def scout(source: Source, signal_fn, seen: SeenStore | None = None) -> ReviewQueue:
     """`signal_fn(candidate) -> dict` computes the weighted signals for one
     candidate; scoring itself stays a pure function (scorer.py) so it's
     testable without a source at all.
+
+    `seen`, if given, is checked/marked for every fetched candidate --
+    regardless of gate band -- so a second run never re-surfaces (or lets a
+    human re-approve into) the same thread.
     """
     queue = ReviewQueue()
     for candidate in source.fetch():
+        if seen is not None:
+            if seen.has(candidate.source, candidate.id):
+                continue
+            seen.mark(candidate.source, candidate.id)
         relevance_score = score(signal_fn(candidate))
         band = gate(relevance_score)
         if band == "ignore":
@@ -54,7 +63,8 @@ def run_interactive(queue: ReviewQueue) -> None:
 def main() -> None:
     print(f"symptom vocabulary: {', '.join(SYMPTOMS)}")
     print("No live source wired yet (needs REDDIT_CLIENT_ID/SECRET) -- using empty fixture.")
-    run_interactive(scout(FixtureSource([]), signal_fn=extract_signals))
+    seen = SeenStore("seen.json")
+    run_interactive(scout(FixtureSource([]), signal_fn=extract_signals, seen=seen))
 
 
 if __name__ == "__main__":

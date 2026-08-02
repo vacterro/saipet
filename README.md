@@ -1,6 +1,6 @@
 # SAIPET
 
-v0.2.0 -- see [CHANGELOG.md](CHANGELOG.md)
+v0.3.0 -- see [CHANGELOG.md](CHANGELOG.md)
 
 Read-only internet scout. Finds threads where people describe a real
 problem (symptom search, not brand search), scores relevance, drafts a

@@ -18,3 +18,9 @@
 - 02.08.26 19:37 [E-017] [parent: E-016] [T-002] RUN: ship v0.2.0 -> skipped publish (no origin, user already deferred GitHub publish this session -- not re-asking per ticket). Feature bump 0.1.0->0.2.0 (real scoring signals).
 - 02.08.26 19:37 [E-018] [parent: E-017] [T-002] DEC: goal_tickets 0->1
 - 02.08.26 19:38 [E-019] [parent: E-018] [T-003] DEC: SHIP -> DONE (T-002). DONE -> SCOUT; claim T-003; owner claude-opus.
+- 02.08.26 19:40 [E-020] [parent: E-019] [T-003] RUN: SCOUT -- only touches cli.py's scout() and a new store.py; no external unknowns. SCOUT -> BUILD.
+- 02.08.26 19:45 [E-021] [parent: E-020] [T-003] RUN: BUILD -> saipet/store.py: SeenStore, local JSON, load-once/rewrite-on-mark. Wired into cli.scout() -- every fetched candidate is checked/marked regardless of gate band, before scoring. seen.json gitignored. 3 new tests incl. a scout()-level integration test matching the ticket's own verify wording exactly. 16/16 total green.
+- 02.08.26 19:46 [E-022] [parent: E-021] [T-003] DEC: REVIEW pass 1 -- no P0/P1. Single-writer JSON has no locking, noted in the class docstring as a known limit rather than silently hidden; acceptable for this scout's actual concurrency (one interactive process). DEC: SHIP.
+- 02.08.26 19:47 [E-023] [parent: E-022] [T-003] RUN: ship v0.3.0 -> skipped publish (no origin, standing user deferral). Feature bump 0.2.0->0.3.0.
+- 02.08.26 19:47 [E-024] [parent: E-023] [T-003] DEC: goal_tickets 1->2
+- 02.08.26 19:48 [E-025] [parent: E-024] [T-004] DEC: SHIP -> DONE (T-003). DONE -> SCOUT; claim T-004; owner claude-opus.
