@@ -24,3 +24,9 @@
 - 02.08.26 19:47 [E-023] [parent: E-022] [T-003] RUN: ship v0.3.0 -> skipped publish (no origin, standing user deferral). Feature bump 0.2.0->0.3.0.
 - 02.08.26 19:47 [E-024] [parent: E-023] [T-003] DEC: goal_tickets 1->2
 - 02.08.26 19:48 [E-025] [parent: E-024] [T-004] DEC: SHIP -> DONE (T-003). DONE -> SCOUT; claim T-004; owner claude-opus.
+- 02.08.26 19:50 [E-026] [parent: E-025] [T-004] RUN: SCOUT -- touches cli.py only, `draft.build_draft`'s `mention_saipen` param already existed unused. SCOUT -> BUILD.
+- 02.08.26 19:55 [E-027] [parent: E-026] [T-004] RUN: BUILD -> `run_interactive` takes injectable `input_fn`/`print_fn` (so this is testable without faking stdin), asks "Mention SAIPEN link? [Y/n]" per item, passes the choice into `build_draft`. 2 new tests. 18/18 total green.
+- 02.08.26 19:56 [E-028] [parent: E-027] [T-004] DEC: REVIEW pass 1 -- no P0/P1. DEC: SHIP.
+- 02.08.26 19:57 [E-029] [parent: E-028] [T-004] RUN: ship v0.4.0 -> skipped publish (no origin, standing user deferral).
+- 02.08.26 19:57 [E-030] [parent: E-029] [T-004] DEC: goal_tickets 2->3
+- 02.08.26 19:58 [E-031] [parent: E-030] [T-005] DEC: SHIP -> DONE (T-004). DONE -> SCOUT; claim T-005; owner claude-opus.

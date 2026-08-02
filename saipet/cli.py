@@ -43,21 +43,24 @@ def scout(source: Source, signal_fn, seen: SeenStore | None = None) -> ReviewQue
     return queue
 
 
-def run_interactive(queue: ReviewQueue) -> None:
+def run_interactive(queue: ReviewQueue, input_fn=input, print_fn=print) -> None:
+    """`input_fn`/`print_fn` are injectable so this loop is testable without
+    faking stdin (RFC-style: no side channel a test has to fight)."""
     items = sorted(queue.pending(), key=lambda i: -i.relevance_score)
     for item in items:
         c = item.candidate
-        print(f"\n[{item.band.upper()}] score={item.relevance_score:.0f} {c.permalink}")
-        print(f"  {c.title}")
-        solution = input("  Solve-first reply (blank to skip): ").strip()
+        print_fn(f"\n[{item.band.upper()}] score={item.relevance_score:.0f} {c.permalink}")
+        print_fn(f"  {c.title}")
+        solution = input_fn("  Solve-first reply (blank to skip): ").strip()
         if not solution:
             continue
-        item.draft = build_draft(solution)
-        print("\n--- draft (paste into Reddit yourself if you approve) ---")
-        print(item.draft)
-        if input("Approve? [y/N] ").strip().lower() == "y":
+        mention = input_fn("  Mention SAIPEN link? [Y/n] ").strip().lower() != "n"
+        item.draft = build_draft(solution, mention_saipen=mention)
+        print_fn("\n--- draft (paste into Reddit yourself if you approve) ---")
+        print_fn(item.draft)
+        if input_fn("Approve? [y/N] ").strip().lower() == "y":
             queue.approve(item)
-            print("Approved -- not posted. Copy the text above manually.")
+            print_fn("Approved -- not posted. Copy the text above manually.")
 
 
 def main() -> None:

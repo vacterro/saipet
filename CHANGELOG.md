@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.4.0 (2026-08-02)
+- No-link mode wired end-to-end: the interactive review step now asks whether to mention SAIPEN at all, so a relevant-but-not-appropriate-for-promo thread can still get a genuinely helpful, link-free reply.
+
 ## v0.3.0 (2026-08-02)
 - Seen-thread persistence (`saipet/store.py`): every fetched candidate is checked/marked against a local JSON store, so a second `scout()` run never re-surfaces (or lets a human re-approve into) the same thread.
 
