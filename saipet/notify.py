@@ -64,6 +64,21 @@ def heartbeat(cycle: int, queued: int, now: float) -> Notification:
     )
 
 
+def degraded(detail: str, cycle: int, now: float) -> Notification:
+    """Some targets were unreadable, not all of them.
+
+    Worth saying out loud -- a subreddit that has been 403ing for a week is
+    a finding of its own -- but not worth slowing the whole monitor down
+    for, which is what makes it a different kind from `error`.
+    """
+    return Notification(
+        kind="warning",
+        text=f"cycle {cycle} degraded: {detail}",
+        at=now,
+        data={"cycle": cycle, "detail": detail},
+    )
+
+
 def error(message: str, cycle: int, now: float) -> Notification:
     return Notification(
         kind="error",

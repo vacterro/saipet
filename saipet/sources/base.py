@@ -19,6 +19,49 @@ class Candidate:
     created_utc: float = 0.0
 
 
+HEALTHY = "healthy"
+DEGRADED = "degraded"
+FAILED = "failed"
+
+
+@dataclass(frozen=True)
+class FetchHealth:
+    """How much of what we asked for actually came back.
+
+    Two states are not enough, and that gap let a total outage look like a
+    quiet night: a source that reads none of its targets still returned a
+    list, an empty one, indistinguishable from "nobody posted". The count
+    of targets is only known where the fetch happens, so the verdict is
+    made here rather than inferred downstream from a failure list whose
+    emptiness also means "nothing was configured".
+    """
+
+    attempted: int = 0
+    failed: tuple = ()  # (target, error) pairs
+
+    @property
+    def succeeded(self) -> int:
+        return self.attempted - len(self.failed)
+
+    @property
+    def state(self) -> str:
+        if self.attempted == 0:
+            # Nothing was asked for. Not a failure of the source -- the
+            # caller has an empty allowlist, which its own check reports.
+            return HEALTHY
+        if not self.failed:
+            return HEALTHY
+        return FAILED if self.succeeded == 0 else DEGRADED
+
+    def as_dict(self) -> dict:
+        return {
+            "state": self.state,
+            "attempted": self.attempted,
+            "succeeded": self.succeeded,
+            "failed": [{"target": target, "error": err} for target, err in self.failed],
+        }
+
+
 class Source:
     """Read-only fetch interface. Every concrete source only ever reads."""
 
@@ -26,6 +69,11 @@ class Source:
 
     def fetch(self, limit: int = 25) -> list[Candidate]:
         raise NotImplementedError
+
+    @property
+    def health(self) -> FetchHealth:
+        """The last fetch's health. Sources that cannot fail say so."""
+        return FetchHealth(attempted=1)
 
 
 class FixtureSource(Source):

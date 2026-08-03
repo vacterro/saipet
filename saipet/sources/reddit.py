@@ -1,7 +1,7 @@
 import os
 import time
 
-from saipet.sources.base import Candidate, Source
+from saipet.sources.base import Candidate, FetchHealth, Source
 
 DEFAULT_RETRIES = 2
 DEFAULT_BACKOFF_SECONDS = 2.0
@@ -41,6 +41,7 @@ class RedditSource(Source):
         # (subreddit, error text) for every subreddit this fetch gave up on.
         # Reset per fetch: it describes the last run, not a lifetime tally.
         self.last_failures: list[tuple[str, str]] = []
+        self._health = FetchHealth()
 
     def _client(self):
         import praw  # local import: only needed once real credentials exist
@@ -86,14 +87,33 @@ class RedditSource(Source):
                     self._sleep(self.backoff_seconds * (2**attempt))
         raise last_error  # type: ignore[misc]
 
+    @property
+    def health(self) -> FetchHealth:
+        return self._health
+
     def fetch(self, limit: int = 25) -> list[Candidate]:
-        reddit = self._client()
-        query = self._query()
         self.last_failures = []
+        self._health = FetchHealth()
+        try:
+            reddit = self._client()
+        except Exception as exc:  # noqa: BLE001 -- bad or missing credentials
+            # Every target is unreachable, not zero targets attempted: a
+            # dead client that reported `attempted=0` would read as healthy.
+            failure = f"{type(exc).__name__}: {exc}"
+            self.last_failures = [(sub, failure) for sub in self.subreddits]
+            self._health = FetchHealth(
+                attempted=len(self.subreddits), failed=tuple(self.last_failures)
+            )
+            return []
+
+        query = self._query()
         out: list[Candidate] = []
         for sub in self.subreddits:
             try:
                 out.extend(self._search_one(reddit, sub, query, limit))
             except Exception as exc:  # noqa: BLE001 -- see _search_one
                 self.last_failures.append((sub, f"{type(exc).__name__}: {exc}"))
+        self._health = FetchHealth(
+            attempted=len(self.subreddits), failed=tuple(self.last_failures)
+        )
         return out

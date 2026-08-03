@@ -88,6 +88,7 @@ class Bridge:
         self.queue = ReviewQueue()
         self.last_report: dict = {}
         self.last_failures: list = []
+        self.last_health: dict = {}
         # Filled by the `watch` verb; read by `status`. Kept here rather than
         # inside the loop so a driving agent can ask "is the monitor alive"
         # between calls.
@@ -114,6 +115,7 @@ class Bridge:
             now_fn=self._now_fn,
         )
         self.last_failures = list(getattr(source, "last_failures", []))
+        health = source.health
 
         paths = write_report(
             self.queue.pending(),
@@ -123,10 +125,13 @@ class Bridge:
         )
         self.last_report = {"jsonl": str(paths.jsonl), "markdown": str(paths.markdown)}
 
+        self.last_health = health.as_dict()
         return {
             "source": source.name,
             "subreddits": targets,
             "queued": len(self.queue.pending()),
+            "health": health.state,
+            "fetch": self.last_health,
             "failures": [{"subreddit": sub, "error": err} for sub, err in self.last_failures],
             "report": self.last_report,
         }
@@ -151,6 +156,7 @@ class Bridge:
                 "prioritize_at": config.GATE_PRIORITIZE_AT,
             },
             "failures": [{"subreddit": sub, "error": err} for sub, err in self.last_failures],
+            "fetch": self.last_health,
             "report": self.last_report,
             "monitor": self.monitor_state.as_dict() if self.monitor_state else None,
             "notify_min_score": config.NOTIFY_MIN_SCORE,

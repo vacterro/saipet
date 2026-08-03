@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.21.0 (2026-08-03)
+- **Fixed: a total Reddit outage counted as a healthy cycle.** A scout that reached none of its subreddits returned an empty list with `ok: True`, which is byte-identical to a quiet night -- so expired keys or a 403 across the board produced `errors: 0` and a cheerful heartbeat indefinitely.
+- Sources now report `FetchHealth`: targets attempted versus failed, resolving to `healthy`, `degraded` or `failed`. The verdict is made where the target count is known rather than inferred downstream from a failure list whose emptiness also means "nothing was configured".
+- The monitor acts on it: `failed` is a cycle failure with backoff and an error notification; `degraded` is a warning that does not slow the loop, because the subreddits that answered are still worth polling on schedule.
+- Credentials that fail in `_client()` -- before any subreddit is touched -- count as every target failing, not zero targets attempted, which would have read as perfectly healthy.
+
 ## v0.20.0 (2026-08-03)
 - `watch` verb on the bridge: an agent driving SAIPET over the API can now run the monitor itself for a bounded number of cycles and get the findings back, rather than only being able to fire single scouts.
 - Bounded always -- there is no "forever" value. A dispatch that never returns hangs whoever called it, and for the command engine one typed line would eat the process. The unattended forever-run stays `python -m saipet.monitor`, which is something you can actually stop.

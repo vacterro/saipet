@@ -28,11 +28,13 @@ from saipet.notify import (
     MultiNotifier,
     Notifier,
     NullNotifier,
+    degraded,
     error,
     finding,
     heartbeat,
 )
 from saipet.report import DEFAULT_REPORT_DIR
+from saipet.sources.base import DEGRADED, FAILED
 from saipet.runtime_config import (
     DEFAULT_CONFIG_PATH,
     ConfigError,
@@ -59,6 +61,9 @@ class MonitorState:
     last_cycle_at: float | None = None
     last_error: str = ""
     errors: int = 0
+    health: str = "healthy"
+    degraded_cycles: int = 0
+    last_degradation: str = ""
     findings: list = field(default_factory=list)
 
     def as_dict(self) -> dict:
@@ -69,6 +74,9 @@ class MonitorState:
             "last_cycle_at": self.last_cycle_at,
             "last_error": self.last_error,
             "errors": self.errors,
+            "health": self.health,
+            "degraded_cycles": self.degraded_cycles,
+            "last_degradation": self.last_degradation,
         }
 
 
@@ -136,9 +144,15 @@ def run_monitor(
             consecutive_failures += 1
             tracker.errors += 1
             tracker.last_error = failure
+            tracker.health = FAILED
             _send_quietly(sink, error(failure, cycle, now))
         else:
             consecutive_failures = 0
+            if tracker.health == DEGRADED:
+                # Said out loud, but no backoff: the targets that answered
+                # are still worth polling on schedule.
+                tracker.degraded_cycles += 1
+                _send_quietly(sink, degraded(tracker.last_degradation, cycle, now))
             if heartbeat_every and cycle % heartbeat_every == 0:
                 _send_quietly(sink, heartbeat(cycle, tracker.queued, now))
 
@@ -178,6 +192,19 @@ def _run_one_cycle(bridge, sink, tracker, args, min_score, now) -> str:
         scouted = bridge.dispatch("scout", **args)
         if not scouted.ok:
             return scouted.error
+
+        # `ok` only says the dispatch itself worked. A scout that reached
+        # none of its subreddits -- expired keys, 403, Reddit down -- comes
+        # back ok with an empty list, which is byte-identical to a quiet
+        # night. That is the bug this ticket exists for.
+        reported = scouted.data.get("health", "healthy")
+        failed = scouted.data.get("fetch", {}).get("failed", [])
+        detail = "; ".join(f"{f['target']}: {f['error']}" for f in failed)
+        if reported == FAILED:
+            return f"every target failed -- {detail}" if detail else "every target failed"
+
+        tracker.health = reported
+        tracker.last_degradation = detail if reported == DEGRADED else ""
 
         listed = bridge.dispatch("queue")
         if not listed.ok:
