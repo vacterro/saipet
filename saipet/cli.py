@@ -133,6 +133,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--report-only",
+        action="store_true",
+        help=(
+            "fetch, score, gate and write the report, then stop -- no prompts. "
+            "For a scheduled or agent-driven run, which has no stdin to block on."
+        ),
+    )
+    parser.add_argument(
         "--report-dir",
         default=DEFAULT_REPORT_DIR,
         metavar="DIR",
@@ -177,7 +185,7 @@ def run_interactive(queue: ReviewQueue, input_fn=input, print_fn=print) -> None:
             print_fn("Approved -- not posted. Copy the text above manually.")
 
 
-def main(argv: list[str] | None = None, print_fn=print) -> None:
+def main(argv: list[str] | None = None, print_fn=print, input_fn=input) -> None:
     args = parse_args(argv)
 
     try:
@@ -238,7 +246,12 @@ def main(argv: list[str] | None = None, print_fn=print) -> None:
     )
     print_fn(f"report: {paths.jsonl} / {paths.markdown}")
 
-    run_interactive(queue, print_fn=print_fn)
+    if args.report_only:
+        # Nothing below this line may touch stdin: an unattended run that
+        # blocks on a prompt hangs until something kills it.
+        return
+
+    run_interactive(queue, input_fn=input_fn, print_fn=print_fn)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 # SAIPET
 
-v0.11.0 -- see [CHANGELOG.md](CHANGELOG.md)
+v0.12.0 -- see [CHANGELOG.md](CHANGELOG.md)
 
 Read-only internet scout. Finds threads where people describe a real
 problem (symptom search, not brand search), scores relevance, drafts a
@@ -44,7 +44,11 @@ python -m saipet.cli --subreddit LocalLLaMA --subreddit AI_Agents --limit 50
 ```
 
 `--subreddit` is repeatable and defaults to the allowlist; `--limit` caps
-posts fetched per subreddit.
+posts fetched per subreddit. Every run writes `runs/<UTC stamp>.jsonl`
+plus a matching `.md` digest (`--report-dir` moves them).
+
+Unattended runs use `--report-only`: fetch, score, gate, write the report,
+stop. No prompts, nothing to block on.
 
 ## Tuning
 

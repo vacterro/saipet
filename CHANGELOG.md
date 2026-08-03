@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.12.0 (2026-08-03)
+- `--report-only`: fetch, score, gate and write the report, then stop. No prompts, so a scheduled or agent-driven run has nothing to block on.
+- `main()` now takes an injectable `input_fn`, which is what makes the no-stdin promise testable rather than merely stated.
+
 ## v0.11.0 (2026-08-03)
 - Persisted run reports (`saipet/report.py`): every run writes `runs/<UTC stamp>.jsonl` and a matching `.md` digest, so findings survive the process instead of dying with the review queue. `--report-dir` moves them.
 - Each record carries the signal breakdown behind its score, not just the number, plus any subreddit that could not be fetched. A run that reached nine subreddits out of ten is not the same run as one that reached all ten.

@@ -80,3 +80,10 @@
 - 03.08.26 00:41 [E-079] [parent: E-078] [T-011] RUN: pytest -q -> 73 passed. Ticket criterion covered directly: both files written, every documented field asserted. conf: high.
 - 03.08.26 00:41 [E-080] [parent: E-079] [T-011] DEC: goal_tickets 4->5
 - 03.08.26 00:41 [E-081] [parent: E-080] [T-011] DEC: REVIEW pass 1 -- no P0/P1. Report path comes from the user's own `--report-dir`, never from fetched content, so no fetched string reaches the filesystem. DEC: SHIP.
+- 03.08.26 00:42 [E-082] [parent: E-081] [T-011] RUN: ship v0.11.0 -> skipped publish (no origin, standing user deferral). Committed 8adf9d2.
+- 03.08.26 00:42 [E-083] [parent: E-082] [T-012] DEC: SHIP -> DONE (T-011). DONE -> SCOUT; claim T-012; owner claude-opus.
+- 03.08.26 00:42 [E-084] [parent: E-083] [T-012] RUN: SCOUT -- cli.py only, one flag and one branch around the `run_interactive` call the report already runs before. Size gate (RFC plan.md): no detailed analysis, gates unchanged. SCOUT -> BUILD.
+- 03.08.26 08:59 [E-085] [parent: E-084] [T-012] RUN: BUILD -> `--report-only` returns straight after the report is written; `main()` gained an injectable `input_fn` so the no-stdin promise is testable at all. 4 new tests.
+- 03.08.26 08:59 [E-086] [parent: E-085] [T-012] RUN: pytest -q -> 77 passed. The obvious version of this test passes for the wrong reason -- an empty fixture queue prompts for nothing either way -- so the source is stubbed to a candidate that WOULD be prompted about, and a twin test drops the flag to prove the same run does reach the prompt. conf: high.
+- 03.08.26 08:59 [E-087] [parent: E-086] [T-012] DEC: goal_tickets 5->6
+- 03.08.26 08:59 [E-088] [parent: E-087] [T-012] DEC: REVIEW pass 1 -- no P0/P1. `--report-only` changes only what happens after scoring, never the scoring. DEC: SHIP.
