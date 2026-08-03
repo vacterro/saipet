@@ -1,6 +1,6 @@
 # SAIPET
 
-v0.18.0 -- see [CHANGELOG.md](CHANGELOG.md)
+v0.19.0 -- see [CHANGELOG.md](CHANGELOG.md)
 
 Read-only internet scout. Finds threads where people describe a real
 problem (symptom search, not brand search), scores relevance, drafts a
@@ -49,6 +49,26 @@ plus a matching `.md` digest (`--report-dir` moves them).
 
 Unattended runs use `--report-only`: fetch, score, gate, write the report,
 stop. No prompts, nothing to block on.
+
+## Leaving it running
+
+`python -m saipet.monitor` is the unattended half: it scouts on an
+interval and reports anything worth your attention. It still never posts.
+
+```bash
+python -m saipet.monitor --interval 900 --min-score 80
+```
+
+Findings go two places at once -- `notifications.jsonl` plus a
+human-readable `inbox.md`, and one line per finding on stdout for whatever
+agent is supervising the process (`--quiet` drops the stdout half,
+`--notify-file` moves the feed). A heartbeat every cycle keeps "alive and
+finding nothing" distinguishable from "died at 03:00", and a failed cycle
+is reported and backed off rather than ending the run.
+
+`--min-score` is a deliberately higher bar than the queue gate: the gate
+decides what you may look at when you sit down, this decides what is worth
+interrupting you for.
 
 ## Driving it from an agent
 

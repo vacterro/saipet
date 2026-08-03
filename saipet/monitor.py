@@ -14,12 +14,31 @@ cycle's new findings.
 a one-shot run and a test are the same code as the daemon.
 """
 
+import argparse
 import time
 from dataclasses import dataclass, field
 
 from saipet import config
 from saipet.bridge import Bridge
-from saipet.notify import Notifier, NullNotifier, error, finding, heartbeat
+from saipet.cli import DEFAULT_LIMIT, build_source
+from saipet.notify import (
+    DEFAULT_NOTIFICATION_FILE,
+    ConsoleNotifier,
+    FileNotifier,
+    MultiNotifier,
+    Notifier,
+    NullNotifier,
+    error,
+    finding,
+    heartbeat,
+)
+from saipet.report import DEFAULT_REPORT_DIR
+from saipet.runtime_config import (
+    DEFAULT_CONFIG_PATH,
+    ConfigError,
+    apply_overrides,
+    load_overrides,
+)
 
 DEFAULT_INTERVAL_SECONDS = 900  # 15 minutes: well under any sane rate limit
 MAX_BACKOFF_MULTIPLIER = 8  # a broken API is not worth hammering every 15 min
@@ -172,3 +191,126 @@ def _run_one_cycle(bridge, sink, tracker, args, min_score, now) -> str:
         return ""
     except Exception as exc:  # noqa: BLE001 -- see the docstring above
         return f"{type(exc).__name__}: {exc}"
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="saipet-monitor",
+        description=(
+            "Leave this running. It scouts on an interval, reports anything worth "
+            "your attention, and never posts."
+        ),
+    )
+    parser.add_argument("--subreddit", action="append", metavar="NAME", help="repeatable")
+    parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT)
+    parser.add_argument("--since-hours", type=float, default=None)
+    parser.add_argument(
+        "--interval",
+        type=float,
+        default=DEFAULT_INTERVAL_SECONDS,
+        metavar="SECONDS",
+        help=f"seconds between cycles (default: {DEFAULT_INTERVAL_SECONDS})",
+    )
+    parser.add_argument(
+        "--cycles",
+        type=int,
+        default=None,
+        metavar="N",
+        help="stop after N cycles (default: run until stopped)",
+    )
+    parser.add_argument(
+        "--min-score",
+        type=float,
+        default=None,
+        metavar="S",
+        help="report findings at or above S (default: config.NOTIFY_MIN_SCORE)",
+    )
+    parser.add_argument(
+        "--notify-file",
+        default=DEFAULT_NOTIFICATION_FILE,
+        metavar="PATH",
+        help=f"JSONL feed; a sibling inbox.md is written too (default: {DEFAULT_NOTIFICATION_FILE})",
+    )
+    parser.add_argument(
+        "--heartbeat-every",
+        type=int,
+        default=1,
+        metavar="N",
+        help="proof of life every Nth cycle, 0 to disable (default: 1)",
+    )
+    parser.add_argument("--report-dir", default=DEFAULT_REPORT_DIR, metavar="DIR")
+    parser.add_argument("--config", default=DEFAULT_CONFIG_PATH, metavar="PATH")
+    parser.add_argument("--quiet", action="store_true", help="file sink only, nothing on stdout")
+
+    args = parser.parse_args(argv)
+    if args.interval <= 0:
+        parser.error("--interval must be positive (a monitor with no gap is a rate-limit ban)")
+    if args.cycles is not None and args.cycles < 1:
+        parser.error("--cycles must be at least 1")
+    if args.heartbeat_every < 0:
+        parser.error("--heartbeat-every must not be negative (0 disables it)")
+    if args.limit < 1:
+        parser.error("--limit must be at least 1")
+    return args
+
+
+def build_notifier(notify_file: str, quiet: bool, print_fn=print) -> Notifier:
+    """File always, console unless silenced.
+
+    Both, by default, because they answer different questions: the console
+    is what a supervising agent reads live, the file is what anyone asks
+    afterwards.
+    """
+    sinks: list[Notifier] = [FileNotifier(notify_file)]
+    if not quiet:
+        sinks.append(ConsoleNotifier(print_fn=print_fn))
+    return MultiNotifier(*sinks)
+
+
+def main(argv: list[str] | None = None, print_fn=print, **run_kwargs) -> MonitorState:
+    """One command to leave running. Returns the state, for tests and callers."""
+    args = parse_args(argv)
+
+    try:
+        applied = apply_overrides(load_overrides(args.config))
+    except ConfigError as exc:
+        print_fn(f"config error: {exc}")
+        raise SystemExit(2) from exc
+    if applied:
+        print_fn(f"config: {args.config} overrides {', '.join(applied)}")
+
+    subreddits = args.subreddit or sorted(config.SUBREDDIT_ALLOWLIST)
+    bridge = Bridge(report_dir=args.report_dir, source_factory=build_source)
+    notifier = build_notifier(args.notify_file, args.quiet, print_fn=print_fn)
+
+    print_fn(
+        f"monitor: every {args.interval:g}s, "
+        f"subreddits {', '.join(subreddits) if subreddits else '(none)'}, "
+        f"reporting at or above {config.NOTIFY_MIN_SCORE if args.min_score is None else args.min_score}"
+    )
+    if not subreddits:
+        print_fn(
+            "WARNING: no subreddits to watch -- the allowlist is empty, so every "
+            "cycle will find nothing. Add some to the config file first."
+        )
+
+    scout_args: dict = {"limit": args.limit}
+    if subreddits:
+        scout_args["subreddits"] = subreddits
+    if args.since_hours is not None:
+        scout_args["since_hours"] = args.since_hours
+
+    return run_monitor(
+        bridge,
+        notifier=notifier,
+        interval_seconds=args.interval,
+        cycles=args.cycles,
+        scout_args=scout_args,
+        min_score=args.min_score,
+        heartbeat_every=args.heartbeat_every,
+        **run_kwargs,
+    )
+
+
+if __name__ == "__main__":
+    main()

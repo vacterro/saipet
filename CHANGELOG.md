@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.19.0 (2026-08-03)
+- `python -m saipet.monitor` -- one command to leave running. `--interval`, `--cycles`, `--min-score`, `--notify-file`, `--heartbeat-every`, `--quiet`, plus the scout's own flags. Reuses the existing config, credential and report plumbing rather than growing a second copy of it.
+- Findings go to a file feed and the console by default, because they answer different questions: the console is what a supervising agent reads live, the file is what anyone asks afterwards.
+- An empty subreddit allowlist is called out at start-up. A monitor that finds nothing because it is watching nothing looks exactly like a quiet night otherwise.
+- `--interval 0` is refused: a monitor with no gap between cycles is a rate-limit ban, not a fast monitor.
+
 ## v0.18.0 (2026-08-03)
 - A failed cycle no longer ends the monitor. Reddit goes down, a token expires, a disk fills -- a loop that exits on the first of those is one you discover is dead a week later. Failures are reported as notifications, counted on `MonitorState`, and backed off 2x per consecutive failure to a cap of 8x, resetting on the first good cycle.
 - Both failure shapes are caught: `dispatch` swallows its own exceptions and returns `ok=False`, while anything outside it still raises. Catching only the second would leave a monitor running happily against a dead API, reporting nothing, looking healthy.
