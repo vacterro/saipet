@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.14.0 (2026-08-03)
+- Command engine (`python -m saipet.bridge`): a line-oriented loop over the T-013 dispatch. One line in (`scout subreddit=LocalLLaMA limit=50`), one JSON line out. A local agent, or SAIPEN, can now drive the scout over a pipe.
+- Deliberately not a shell. An unrecognised line is refused and passed nowhere -- there is no fallback that tries to run it. This process holds text fetched off the public internet, and a Reddit title reaching an execution path is a stranger's code running on your machine.
+- No prompt is printed: the caller is normally another program, and `saipet> ` in front of every JSON line is one more thing to strip.
+
 ## v0.13.0 (2026-08-03)
 - Control-plane seam (`saipet/bridge/`): `Bridge.dispatch(verb, **args)` gives an external agent a stable way to drive SAIPET -- `scout`, `report`, `status`, `queue`, `approve` -- returning structured results instead of printed text. `cli.main()` remains a script; nothing has to scrape its stdout any more.
 - The verb set is closed and resolved through a fixed table, never `getattr`. Everything this bridge acts on originates on the public internet, so dynamic resolution would turn "fetched some posts" into "ran what a stranger wrote". An unknown verb is refused with nothing executed.

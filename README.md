@@ -1,6 +1,6 @@
 # SAIPET
 
-v0.13.0 -- see [CHANGELOG.md](CHANGELOG.md)
+v0.14.0 -- see [CHANGELOG.md](CHANGELOG.md)
 
 Read-only internet scout. Finds threads where people describe a real
 problem (symptom search, not brand search), scores relevance, drafts a
@@ -49,6 +49,32 @@ plus a matching `.md` digest (`--report-dir` moves them).
 
 Unattended runs use `--report-only`: fetch, score, gate, write the report,
 stop. No prompts, nothing to block on.
+
+## Driving it from an agent
+
+`python -m saipet.bridge` is a command engine on stdin/stdout: one line in,
+one JSON line out. That is how another agent -- or SAIPEN -- runs the scout
+without scraping the CLI's output.
+
+```
+scout subreddit=LocalLLaMA,AI_Agents limit=50 since_hours=48
+queue
+approve id=abc123 solution="set a checkpoint after each step"
+status
+quit
+```
+
+The verbs are `scout`, `queue`, `report`, `status`, `approve`, plus `help`
+and `quit`. Programmatically, `saipet.bridge.Bridge.dispatch(verb, **args)`
+is the same surface without the text layer.
+
+**It is not a shell, and that is the point.** An unrecognised line is
+refused and passed nowhere -- there is no fallback that tries to run it.
+This process holds text fetched off the public internet, and a Reddit title
+that reaches an execution path is a stranger's code running on your
+machine. A static scan fails the build if any execution primitive appears
+anywhere in `saipet/`. `approve` still posts nothing: it hands back a draft
+for a human to paste.
 
 ## Tuning
 
