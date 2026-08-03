@@ -19,9 +19,10 @@ from dataclasses import dataclass, field
 
 from saipet import config
 from saipet.bridge import Bridge
-from saipet.notify import Notifier, NullNotifier, finding
+from saipet.notify import Notifier, NullNotifier, error, finding, heartbeat
 
 DEFAULT_INTERVAL_SECONDS = 900  # 15 minutes: well under any sane rate limit
+MAX_BACKOFF_MULTIPLIER = 8  # a broken API is not worth hammering every 15 min
 
 
 @dataclass
@@ -69,6 +70,7 @@ def run_monitor(
     cycles: int | None = None,
     scout_args: dict | None = None,
     min_score: float | None = None,
+    heartbeat_every: int = 0,
     sleep_fn=time.sleep,
     now_fn=time.time,
     state: MonitorState | None = None,
@@ -79,6 +81,17 @@ def run_monitor(
     each cycle, so a config reload mid-run is honoured rather than frozen
     at start-up.
 
+    `heartbeat_every=N` sends proof of life every Nth cycle. It defaults to
+    off here and on in the daemon entrypoint, which is the asymmetry that
+    matters: a caller driving the loop itself already knows it is alive,
+    while for something left running unattended "alive and finding nothing"
+    and "died at 03:00" are identical silence, and only one is fine.
+
+    **A failed cycle never ends the run.** Reddit goes down, a token
+    expires, a disk fills; a monitor that exits on the first of those is a
+    monitor you discover is dead a week later. Failures are reported,
+    counted, and backed off exponentially to `MAX_BACKOFF_MULTIPLIER`.
+
     Returns the state it accumulated, so a bounded run is directly
     assertable and an unbounded one leaves the same object behind for
     whoever is holding it.
@@ -88,28 +101,74 @@ def run_monitor(
     args = dict(scout_args or {})
 
     cycle = 0
+    consecutive_failures = 0
     while cycles is None or cycle < cycles:
         cycle += 1
         tracker.cycles = cycle
-
-        bridge.dispatch("scout", **args)
-        items = bridge.dispatch("queue").data.get("items", [])
-
         now = now_fn()
         tracker.last_cycle_at = now
-        tracker.queued += len(items)
-        bar = config.NOTIFY_MIN_SCORE if min_score is None else min_score
-        for item in items:
-            if not is_notify_worthy(item, bar):
-                continue
-            sink.send(finding(item, now))
-            tracker.notified += 1
-            tracker.findings.append(item)
+
+        failure = _run_one_cycle(bridge, sink, tracker, args, min_score, now)
+        if failure:
+            consecutive_failures += 1
+            tracker.errors += 1
+            tracker.last_error = failure
+            _send_quietly(sink, error(failure, cycle, now))
+        else:
+            consecutive_failures = 0
+            if heartbeat_every and cycle % heartbeat_every == 0:
+                _send_quietly(sink, heartbeat(cycle, tracker.queued, now))
 
         last_cycle = cycles is not None and cycle >= cycles
         if not last_cycle:
             # No sleep after the final bounded cycle: a one-shot run that
             # naps first would make `--cycles 1` feel broken.
-            sleep_fn(interval_seconds)
+            sleep_fn(interval_seconds * _backoff(consecutive_failures))
 
     return tracker
+
+
+def _backoff(consecutive_failures: int) -> int:
+    """1x while healthy, doubling per consecutive failure up to the cap."""
+    if consecutive_failures <= 0:
+        return 1
+    return min(2**consecutive_failures, MAX_BACKOFF_MULTIPLIER)
+
+
+def _send_quietly(sink: Notifier, notification) -> None:
+    """A sink that throws must not be able to kill the loop it reports on."""
+    try:
+        sink.send(notification)
+    except Exception:  # noqa: BLE001 -- delivery is best-effort, by design
+        return
+
+
+def _run_one_cycle(bridge, sink, tracker, args, min_score, now) -> str:
+    """One scout + notify pass. Returns "" on success, the failure otherwise.
+
+    A failed cycle arrives two ways and both are caught here: `dispatch`
+    already swallows exceptions and hands back `ok=False`, while anything
+    outside it still raises. Handling only the second would leave a monitor
+    running happily against a dead API, reporting nothing, looking healthy.
+    """
+    try:
+        scouted = bridge.dispatch("scout", **args)
+        if not scouted.ok:
+            return scouted.error
+
+        listed = bridge.dispatch("queue")
+        if not listed.ok:
+            return listed.error
+
+        items = listed.data.get("items", [])
+        tracker.queued += len(items)
+        bar = config.NOTIFY_MIN_SCORE if min_score is None else min_score
+        for item in items:
+            if not is_notify_worthy(item, bar):
+                continue
+            _send_quietly(sink, finding(item, now))
+            tracker.notified += 1
+            tracker.findings.append(item)
+        return ""
+    except Exception as exc:  # noqa: BLE001 -- see the docstring above
+        return f"{type(exc).__name__}: {exc}"
