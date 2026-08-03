@@ -17,6 +17,7 @@ a one-shot run and a test are the same code as the daemon.
 import time
 from dataclasses import dataclass, field
 
+from saipet import config
 from saipet.bridge import Bridge
 from saipet.notify import Notifier, NullNotifier, finding
 
@@ -34,6 +35,7 @@ class MonitorState:
 
     cycles: int = 0
     notified: int = 0
+    queued: int = 0
     last_cycle_at: float | None = None
     last_error: str = ""
     errors: int = 0
@@ -43,10 +45,21 @@ class MonitorState:
         return {
             "cycles": self.cycles,
             "notified": self.notified,
+            "queued": self.queued,
             "last_cycle_at": self.last_cycle_at,
             "last_error": self.last_error,
             "errors": self.errors,
         }
+
+
+def is_notify_worthy(item: dict, min_score: float) -> bool:
+    """Does this finding clear the bar for interrupting a human?
+
+    Separate from the queue gate on purpose. The gate decides what a person
+    may look at when they sit down; this decides what is worth pulling them
+    out of something else for, and the two are not the same number.
+    """
+    return float(item.get("score", 0.0)) >= min_score
 
 
 def run_monitor(
@@ -55,11 +68,16 @@ def run_monitor(
     interval_seconds: float = DEFAULT_INTERVAL_SECONDS,
     cycles: int | None = None,
     scout_args: dict | None = None,
+    min_score: float | None = None,
     sleep_fn=time.sleep,
     now_fn=time.time,
     state: MonitorState | None = None,
 ) -> MonitorState:
     """Scout every `interval_seconds`, notify on what is new, repeat.
+
+    `min_score` is the notify bar; `None` reads `config.NOTIFY_MIN_SCORE` at
+    each cycle, so a config reload mid-run is honoured rather than frozen
+    at start-up.
 
     Returns the state it accumulated, so a bounded run is directly
     assertable and an unbounded one leaves the same object behind for
@@ -79,7 +97,11 @@ def run_monitor(
 
         now = now_fn()
         tracker.last_cycle_at = now
+        tracker.queued += len(items)
+        bar = config.NOTIFY_MIN_SCORE if min_score is None else min_score
         for item in items:
+            if not is_notify_worthy(item, bar):
+                continue
             sink.send(finding(item, now))
             tracker.notified += 1
             tracker.findings.append(item)

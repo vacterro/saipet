@@ -27,6 +27,7 @@ _OVERRIDABLE = {
     "gate_ignore_below": "GATE_IGNORE_BELOW",
     "gate_prioritize_at": "GATE_PRIORITIZE_AT",
     "max_age_hours": "MAX_AGE_HOURS",
+    "notify_min_score": "NOTIFY_MIN_SCORE",
 }
 
 
@@ -98,7 +99,7 @@ def apply_overrides(overrides: dict) -> list[str]:
                 f"weight {name!r} must be a number",
             )
 
-    for key in ("gate_ignore_below", "gate_prioritize_at", "max_age_hours"):
+    for key in ("gate_ignore_below", "gate_prioritize_at", "max_age_hours", "notify_min_score"):
         if key in overrides:
             _require(
                 isinstance(overrides[key], (int, float)) and not isinstance(overrides[key], bool),
@@ -107,6 +108,12 @@ def apply_overrides(overrides: dict) -> list[str]:
 
     if "max_age_hours" in overrides:
         _require(overrides["max_age_hours"] >= 0, "max_age_hours must not be negative")
+
+    if "notify_min_score" in overrides:
+        _require(
+            0 <= overrides["notify_min_score"] <= 100,
+            "notify_min_score must be between 0 and 100",
+        )
 
     ignore_below = overrides.get("gate_ignore_below", config.GATE_IGNORE_BELOW)
     prioritize_at = overrides.get("gate_prioritize_at", config.GATE_PRIORITIZE_AT)
@@ -129,5 +136,7 @@ def apply_overrides(overrides: dict) -> list[str]:
         config.GATE_PRIORITIZE_AT = overrides["gate_prioritize_at"]
     if "max_age_hours" in overrides:
         config.MAX_AGE_HOURS = overrides["max_age_hours"]
+    if "notify_min_score" in overrides:
+        config.NOTIFY_MIN_SCORE = overrides["notify_min_score"]
 
     return sorted(overrides)

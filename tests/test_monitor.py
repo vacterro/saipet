@@ -29,6 +29,13 @@ def _candidate(candidate_id):
     )
 
 
+@pytest.fixture(autouse=True)
+def _notify_everything_queued(monkeypatch):
+    """These tests are about the loop, not the notify bar (T-017 owns that),
+    so the bar is dropped to 0 and every queued item counts as a finding."""
+    monkeypatch.setattr("saipet.config.NOTIFY_MIN_SCORE", 0)
+
+
 @pytest.fixture
 def make_bridge(tmp_path, monkeypatch):
     monkeypatch.setattr("saipet.policy.SUBREDDIT_ALLOWLIST", {"testsub"})

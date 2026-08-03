@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.17.0 (2026-08-03)
+- Notify bar (`config.NOTIFY_MIN_SCORE`, default = the priority gate, overridable as `notify_min_score`): the monitor only reports findings that clear it. The queue gate decides what a human may look at when they sit down; this decides what is worth interrupting them for, and a monitor that pages on every borderline thread teaches its owner to ignore it.
+- The bar is read each cycle, not frozen at start-up, so editing the config because the monitor was too noisy actually quiets the monitor that is already running.
+- `MonitorState.queued` tracks what was queued as well as what was reported, so "found things, none worth waking you" stays visible.
+
 ## v0.16.0 (2026-08-03)
 - Monitor loop (`saipet/monitor.py`): `run_monitor()` scouts on an interval and notifies on whatever is new. Everything else here is something you run; this is the thing you leave running.
 - It drives the bridge rather than reaching into `cli.scout`, so the background loop and an external agent go through exactly one code path instead of two that drift.

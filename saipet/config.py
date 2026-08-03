@@ -38,6 +38,13 @@ GATE_PRIORITIZE_AT = 80
 # unknown age is not evidence of age.
 MAX_AGE_HOURS = 168
 
+# The bar a finding must clear before the unattended monitor tells anyone
+# (T-017). Deliberately higher than GATE_IGNORE_BELOW: the queue bar decides
+# what a human may look at when they sit down, this one decides what is worth
+# interrupting them for. A monitor that pages on every borderline thread
+# teaches its owner to ignore it, which is the same as not running it.
+NOTIFY_MIN_SCORE = GATE_PRIORITIZE_AT
+
 # Cue words for the three secondary fit signals (T-002). Keyword-based on
 # purpose: cheap, explainable, and replaceable by a real classifier later
 # without changing scorer.py's contract.
