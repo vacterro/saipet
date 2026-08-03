@@ -31,6 +31,7 @@ from pathlib import Path
 from saipet import config
 from saipet.cli import DEFAULT_LIMIT, build_source, scout
 from saipet.draft import build_draft
+from saipet.notify import Notifier, NullNotifier
 from saipet.report import DEFAULT_REPORT_DIR, write_report
 from saipet.review import ReviewQueue
 from saipet.signals import extract_signals
@@ -75,14 +76,22 @@ class Bridge:
         seen_path: str | Path = "seen.json",
         source_factory=build_source,
         now_fn=time.time,
+        notifier: Notifier | None = None,
     ):
         self.report_dir = Path(report_dir)
         self.seen = SeenStore(seen_path)
         self._source_factory = source_factory
         self._now_fn = now_fn
+        # Only the `watch` verb uses this; a caller that just dispatches
+        # `scout` reads the result instead of being told about it.
+        self._notifier = notifier if notifier is not None else NullNotifier()
         self.queue = ReviewQueue()
         self.last_report: dict = {}
         self.last_failures: list = []
+        # Filled by the `watch` verb; read by `status`. Kept here rather than
+        # inside the loop so a driving agent can ask "is the monitor alive"
+        # between calls.
+        self.monitor_state = None
 
     # -- verbs ---------------------------------------------------------
 
@@ -143,7 +152,58 @@ class Bridge:
             },
             "failures": [{"subreddit": sub, "error": err} for sub, err in self.last_failures],
             "report": self.last_report,
+            "monitor": self.monitor_state.as_dict() if self.monitor_state else None,
+            "notify_min_score": config.NOTIFY_MIN_SCORE,
             "can_post": False,  # stated, not implied: there is no write path at all
+        }
+
+    def _watch(
+        self,
+        cycles: int = 1,
+        interval_seconds: float = 0,
+        min_score: float | None = None,
+        subreddits: list[str] | None = None,
+        limit: int = DEFAULT_LIMIT,
+        since_hours: float | None = None,
+    ) -> dict:
+        """Run the monitor loop for a bounded number of cycles.
+
+        **Bounded, always.** A dispatch that never returns hangs whoever
+        called it -- for the terminal engine that means one typed line eats
+        the whole process -- so `cycles` has no "forever" value here. The
+        unattended forever-run is `python -m saipet.monitor`, which is a
+        process the caller can actually stop.
+
+        Imported lazily: `monitor` imports this module, so a module-level
+        import would be a cycle.
+        """
+        from saipet.monitor import MonitorState, run_monitor
+
+        if not isinstance(cycles, int) or isinstance(cycles, bool) or cycles < 1:
+            raise ValueError("cycles must be an integer of at least 1")
+
+        scout_args: dict = {"limit": limit}
+        if subreddits:
+            scout_args["subreddits"] = list(subreddits)
+        if since_hours is not None:
+            scout_args["since_hours"] = since_hours
+
+        if self.monitor_state is None:
+            self.monitor_state = MonitorState()
+
+        run_monitor(
+            self,
+            notifier=self._notifier,
+            interval_seconds=interval_seconds,
+            cycles=cycles,
+            scout_args=scout_args,
+            min_score=min_score,
+            now_fn=self._now_fn,
+            state=self.monitor_state,
+        )
+        return {
+            "monitor": self.monitor_state.as_dict(),
+            "findings": list(self.monitor_state.findings),
         }
 
     def _queue(self) -> dict:
@@ -192,7 +252,8 @@ class Bridge:
             "status": self._status,
             "queue": self._queue,
             "approve": self._approve,
+            "watch": self._watch,
         }
 
 
-VERBS = frozenset({"scout", "report", "status", "queue", "approve"})
+VERBS = frozenset({"scout", "report", "status", "queue", "approve", "watch"})

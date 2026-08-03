@@ -1,6 +1,6 @@
 # SAIPET
 
-v0.19.0 -- see [CHANGELOG.md](CHANGELOG.md)
+v0.20.0 -- see [CHANGELOG.md](CHANGELOG.md)
 
 Read-only internet scout. Finds threads where people describe a real
 problem (symptom search, not brand search), scores relevance, drafts a
@@ -84,8 +84,10 @@ status
 quit
 ```
 
-The verbs are `scout`, `queue`, `report`, `status`, `approve`, plus `help`
-and `quit`. Programmatically, `saipet.bridge.Bridge.dispatch(verb, **args)`
+The verbs are `scout`, `watch`, `queue`, `report`, `status`, `approve`,
+plus `help` and `quit`. `watch cycles=N` runs the monitor loop for a
+bounded N and hands the findings back; `status` then reports whether it is
+alive -- cycles run, findings reported, last cycle time, last error. Programmatically, `saipet.bridge.Bridge.dispatch(verb, **args)`
 is the same surface without the text layer.
 
 **It is not a shell, and that is the point.** An unrecognised line is

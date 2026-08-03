@@ -119,11 +119,15 @@ def run_monitor(
     tracker = state if state is not None else MonitorState()
     args = dict(scout_args or {})
 
-    cycle = 0
+    ran = 0
     consecutive_failures = 0
-    while cycles is None or cycle < cycles:
-        cycle += 1
-        tracker.cycles = cycle
+    while cycles is None or ran < cycles:
+        ran += 1
+        # Cumulative, not per-call: `watch` on the bridge calls this
+        # repeatedly with the same state, and a counter that restarted at 1
+        # would tell a driving agent the monitor had just started every time.
+        tracker.cycles += 1
+        cycle = tracker.cycles
         now = now_fn()
         tracker.last_cycle_at = now
 
@@ -138,7 +142,7 @@ def run_monitor(
             if heartbeat_every and cycle % heartbeat_every == 0:
                 _send_quietly(sink, heartbeat(cycle, tracker.queued, now))
 
-        last_cycle = cycles is not None and cycle >= cycles
+        last_cycle = cycles is not None and ran >= cycles
         if not last_cycle:
             # No sleep after the final bounded cycle: a one-shot run that
             # naps first would make `--cycles 1` feel broken.

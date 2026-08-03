@@ -144,3 +144,10 @@
 - 03.08.26 10:39 [E-143] [parent: E-142] [T-019] RUN: pytest -q -> 175 passed. Smoke: `python -m saipet.monitor --cycles 1 --interval 5` in an empty dir -> the empty-allowlist warning, one heartbeat line, and notifications.jsonl/inbox.md/runs/ all created. conf: high.
 - 03.08.26 10:39 [E-144] [parent: E-143] [T-019] DEC: goal_tickets 4->5
 - 03.08.26 10:40 [E-145] [parent: E-144] [T-019] DEC: REVIEW pass 1 -- no P0/P1. `--interval 0` is refused at parse time: a monitor with no gap between cycles is a rate-limit ban, not a fast monitor. DEC: SHIP.
+- 03.08.26 10:41 [E-146] [parent: E-145] [T-019] RUN: ship v0.19.0 -> skipped publish (no origin, standing user deferral). Committed f0fb7c9.
+- 03.08.26 10:41 [E-147] [parent: E-146] [T-020] DEC: SHIP -> DONE (T-019). DONE -> SCOUT; claim T-020; owner claude-opus.
+- 03.08.26 10:41 [E-148] [parent: E-147] [T-020] RUN: SCOUT -- monitor.py imports bridge, so dispatch importing monitor at module level is a cycle; the `watch` handler imports it lazily instead. `watch` must also refuse an unbounded run: a dispatch that never returns hangs the caller's whole session, which for the terminal engine means one line of input eats the process. SCOUT -> BUILD.
+- 03.08.26 10:42 [E-149] [parent: E-148] [T-020] RUN: BUILD -> `watch` verb (lazy monitor import, bounded cycles only, refuses 0/negative/None/float/bool), `Bridge(notifier=...)`, and `monitor` + `notify_min_score` on `status`. 11 new tests.
+- 03.08.26 10:42 [E-150] [parent: E-149] [T-020] RUN: pytest -q -> 190 passed. Smoke: `printf 'watch cycles=1\nstatus\nquit\n' | python -m saipet.bridge` -> watch and status report the same cycle count and timestamp. conf: high.
+- 03.08.26 10:42 [E-151] [parent: E-150] [T-020] DEC: goal_tickets 5->6
+- 03.08.26 10:43 [E-152] [parent: E-151] [T-020] DEC: REVIEW pass 1 -- one P0 found by the accumulation test and fixed in BUILD: `run_monitor` assigned `tracker.cycles = cycle` from a per-call counter, so a second `watch` reset the count to 1 and told a driving agent the monitor had just started. Now cumulative, with the bounded check on a separate local. DEC: SHIP.

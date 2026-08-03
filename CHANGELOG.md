@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.20.0 (2026-08-03)
+- `watch` verb on the bridge: an agent driving SAIPET over the API can now run the monitor itself for a bounded number of cycles and get the findings back, rather than only being able to fire single scouts.
+- Bounded always -- there is no "forever" value. A dispatch that never returns hangs whoever called it, and for the command engine one typed line would eat the process. The unattended forever-run stays `python -m saipet.monitor`, which is something you can actually stop.
+- `status` now reports the monitor: cycles run, findings reported, last cycle time, error count and last error. "Is the thing still alive" was previously unanswerable over the API.
+- Fixed: cycle counts were per-call, so a second `watch` reset them to 1 and told a driving agent the monitor had just started.
+
 ## v0.19.0 (2026-08-03)
 - `python -m saipet.monitor` -- one command to leave running. `--interval`, `--cycles`, `--min-score`, `--notify-file`, `--heartbeat-every`, `--quiet`, plus the scout's own flags. Reuses the existing config, credential and report plumbing rather than growing a second copy of it.
 - Findings go to a file feed and the console by default, because they answer different questions: the console is what a supervising agent reads live, the file is what anyone asks afterwards.
