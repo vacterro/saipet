@@ -4,3 +4,4 @@ __pycache__/
 .venv/
 seen.json
 saipet.config.json
+runs/

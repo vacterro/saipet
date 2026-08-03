@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.11.0 (2026-08-03)
+- Persisted run reports (`saipet/report.py`): every run writes `runs/<UTC stamp>.jsonl` and a matching `.md` digest, so findings survive the process instead of dying with the review queue. `--report-dir` moves them.
+- Each record carries the signal breakdown behind its score, not just the number, plus any subreddit that could not be fetched. A run that reached nine subreddits out of ten is not the same run as one that reached all ten.
+- An empty run still writes both files: "ran and found nothing" and "never ran" are different facts, and a missing file cannot tell them apart.
+
 ## v0.10.0 (2026-08-03)
 - Resilient fetch: subreddits now fail independently. A private, banned, misspelled or rate-limited one is retried (2 retries, doubling backoff) and then recorded, instead of aborting the whole run and losing every subreddit after it.
 - Give-ups land in `RedditSource.last_failures` and the CLI prints a WARNING for each. A subreddit that answered nothing and one that could not be reached are different facts and no longer look identical.

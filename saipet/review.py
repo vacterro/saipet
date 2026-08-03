@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from saipet.sources.base import Candidate
 
@@ -14,6 +14,10 @@ class ReviewItem:
     band: str
     draft: str
     status: str = STATUS_PENDING
+    # The signal breakdown behind `relevance_score`. Kept so a report can
+    # show why a thread scored what it did: a bare number is not something
+    # a human can argue with a week later.
+    signals: dict = field(default_factory=dict)
 
 
 class ReviewQueue:

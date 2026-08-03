@@ -12,6 +12,7 @@ from saipet import config
 from saipet.config import SUBREDDIT_ALLOWLIST, SYMPTOMS
 from saipet.draft import build_draft
 from saipet.policy import is_subreddit_allowed
+from saipet.report import DEFAULT_REPORT_DIR, write_report
 from saipet.review import ReviewItem, ReviewQueue
 from saipet.runtime_config import (
     DEFAULT_CONFIG_PATH,
@@ -70,7 +71,8 @@ def scout(
             continue
         if not is_subreddit_allowed(candidate.subreddit):
             continue
-        relevance_score = score(signal_fn(candidate))
+        signals = signal_fn(candidate)
+        relevance_score = score(signals)
         band = gate(relevance_score)
         if band == "ignore":
             continue
@@ -80,6 +82,7 @@ def scout(
                 relevance_score=relevance_score,
                 band=band,
                 draft="",  # filled in only once a human supplies a real solution
+                signals=dict(signals),
             )
         )
     return queue
@@ -128,6 +131,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "ignore threads older than H hours (default: config.MAX_AGE_HOURS, "
             "currently 168). Use 0 to disable the window."
         ),
+    )
+    parser.add_argument(
+        "--report-dir",
+        default=DEFAULT_REPORT_DIR,
+        metavar="DIR",
+        help=f"where each run's .jsonl + .md report is written (default: {DEFAULT_REPORT_DIR})",
     )
     parser.add_argument(
         "--config",
@@ -221,6 +230,14 @@ def main(argv: list[str] | None = None, print_fn=print) -> None:
         print_fn(f"WARNING: {subreddit} could not be fetched -- {error}")
 
     print_fn(f"{len(queue.pending())} candidate(s) queued for review.")
+
+    paths = write_report(
+        queue.pending(),
+        directory=args.report_dir,
+        failures=getattr(source, "last_failures", []),
+    )
+    print_fn(f"report: {paths.jsonl} / {paths.markdown}")
+
     run_interactive(queue, print_fn=print_fn)
 
 
