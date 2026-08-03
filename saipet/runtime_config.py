@@ -26,6 +26,7 @@ _OVERRIDABLE = {
     "weights": "WEIGHTS",
     "gate_ignore_below": "GATE_IGNORE_BELOW",
     "gate_prioritize_at": "GATE_PRIORITIZE_AT",
+    "max_age_hours": "MAX_AGE_HOURS",
 }
 
 
@@ -97,12 +98,15 @@ def apply_overrides(overrides: dict) -> list[str]:
                 f"weight {name!r} must be a number",
             )
 
-    for key in ("gate_ignore_below", "gate_prioritize_at"):
+    for key in ("gate_ignore_below", "gate_prioritize_at", "max_age_hours"):
         if key in overrides:
             _require(
                 isinstance(overrides[key], (int, float)) and not isinstance(overrides[key], bool),
                 f"{key} must be a number",
             )
+
+    if "max_age_hours" in overrides:
+        _require(overrides["max_age_hours"] >= 0, "max_age_hours must not be negative")
 
     ignore_below = overrides.get("gate_ignore_below", config.GATE_IGNORE_BELOW)
     prioritize_at = overrides.get("gate_prioritize_at", config.GATE_PRIORITIZE_AT)
@@ -123,5 +127,7 @@ def apply_overrides(overrides: dict) -> list[str]:
         config.GATE_IGNORE_BELOW = overrides["gate_ignore_below"]
     if "gate_prioritize_at" in overrides:
         config.GATE_PRIORITIZE_AT = overrides["gate_prioritize_at"]
+    if "max_age_hours" in overrides:
+        config.MAX_AGE_HOURS = overrides["max_age_hours"]
 
     return sorted(overrides)

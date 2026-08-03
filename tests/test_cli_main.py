@@ -48,6 +48,19 @@ def test_subreddit_flag_is_repeatable_and_limit_is_an_int():
     assert args.limit == 5
 
 
+@pytest.mark.parametrize("argv", [["--since-hours", "-1"], ["--limit", "0"]])
+def test_nonsense_numeric_flags_are_rejected_at_parse_time(argv):
+    """A negative window would invert the freshness test and quietly find
+    nothing; a limit below 1 fetches nothing at all."""
+    with pytest.raises(SystemExit):
+        parse_args(argv)
+
+
+def test_since_hours_defaults_to_none_so_config_decides():
+    assert parse_args([]).since_hours is None
+    assert parse_args(["--since-hours", "0"]).since_hours == 0
+
+
 def test_main_warns_when_the_allowlist_is_empty(monkeypatch, tmp_path, _no_creds):
     monkeypatch.setattr("saipet.cli.SUBREDDIT_ALLOWLIST", set())
     monkeypatch.chdir(tmp_path)

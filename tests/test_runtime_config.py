@@ -18,6 +18,7 @@ def _restore_config():
         dict(config.WEIGHTS),
         config.GATE_IGNORE_BELOW,
         config.GATE_PRIORITIZE_AT,
+        config.MAX_AGE_HOURS,
     )
     yield
     config.SYMPTOMS[:] = saved[0]
@@ -27,6 +28,7 @@ def _restore_config():
     config.WEIGHTS.update(saved[2])
     config.GATE_IGNORE_BELOW = saved[3]
     config.GATE_PRIORITIZE_AT = saved[4]
+    config.MAX_AGE_HOURS = saved[5]
 
 
 def _write(tmp_path, data):
@@ -83,6 +85,11 @@ def test_overrides_reach_modules_that_imported_the_names_by_value(tmp_path):
     assert gate(25) == "priority"
 
 
+def test_the_freshness_window_is_overridable_too():
+    apply_overrides({"max_age_hours": 24})
+    assert config.MAX_AGE_HOURS == 24
+
+
 def test_weights_override_merges_rather_than_replacing():
     apply_overrides({"weights": {"problem_match": 1}})
     assert config.WEIGHTS["problem_match"] == 1
@@ -108,6 +115,7 @@ def test_an_unknown_weight_name_is_refused():
         ({"weights": {"problem_match": True}}, "must be a number"),
         ({"gate_ignore_below": "high"}, "gate_ignore_below must be a number"),
         ({"gate_ignore_below": 90, "gate_prioritize_at": 10}, "must not exceed"),
+        ({"max_age_hours": -1}, "max_age_hours must not be negative"),
     ],
 )
 def test_bad_values_are_refused(overrides, message):

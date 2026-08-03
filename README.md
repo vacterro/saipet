@@ -1,6 +1,6 @@
 # SAIPET
 
-v0.8.0 -- see [CHANGELOG.md](CHANGELOG.md)
+v0.9.0 -- see [CHANGELOG.md](CHANGELOG.md)
 
 Read-only internet scout. Finds threads where people describe a real
 problem (symptom search, not brand search), scores relevance, drafts a
@@ -57,7 +57,8 @@ one) to retune without editing the package:
   "symptoms": ["lost context", "handoff", "resume"],
   "weights": { "problem_match": 45 },
   "gate_ignore_below": 60,
-  "gate_prioritize_at": 80
+  "gate_prioritize_at": 80,
+  "max_age_hours": 168
 }
 ```
 

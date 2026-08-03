@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.9.0 (2026-08-03)
+- Freshness window: `scout()` now drops threads older than `config.MAX_AGE_HOURS` (default 168 = one week) before scoring them. Old threads are already read and answered, and replying to one is how a scout starts looking like a bot. `created_utc` had been stored on every candidate and never used.
+- `--since-hours H` overrides the window per run; `0` disables it. A candidate whose source gave no timestamp is kept -- unknown age is not evidence of age.
+- `--since-hours` below zero and `--limit` below one are refused at parse time. A negative window inverts the freshness test, which would make a broken run look like a quiet one.
+
 ## v0.8.0 (2026-08-03)
 - Runtime config file (`saipet/runtime_config.py`): an optional `saipet.config.json` overrides the symptom vocabulary, the subreddit allowlist, the signal weights and both gate thresholds without editing the installed package. No file means the shipped defaults, unchanged.
 - Overrides are validated in full before any of them is applied, so one bad entry can never leave a half-applied configuration; unknown keys and unknown weight names are refused rather than silently ignored.

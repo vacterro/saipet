@@ -6,7 +6,9 @@ the human to paste into Reddit themselves.
 
 import argparse
 import os
+import time
 
+from saipet import config
 from saipet.config import SUBREDDIT_ALLOWLIST, SYMPTOMS
 from saipet.draft import build_draft
 from saipet.policy import is_subreddit_allowed
@@ -26,8 +28,25 @@ from saipet.store import SeenStore
 DEFAULT_LIMIT = 25
 
 
+def is_fresh(candidate, max_age_hours: float | None, now: float) -> bool:
+    """A candidate is stale once it is older than `max_age_hours`.
+
+    `created_utc == 0.0` means the source never supplied a timestamp (every
+    FixtureSource candidate, for one): unknown age is not evidence of age,
+    so those are kept. `max_age_hours=None` disables the window entirely.
+    """
+    if max_age_hours is None or not candidate.created_utc:
+        return True
+    return (now - candidate.created_utc) <= max_age_hours * 3600
+
+
 def scout(
-    source: Source, signal_fn, seen: SeenStore | None = None, limit: int = DEFAULT_LIMIT
+    source: Source,
+    signal_fn,
+    seen: SeenStore | None = None,
+    limit: int = DEFAULT_LIMIT,
+    max_age_hours: float | None = None,
+    now_fn=time.time,
 ) -> ReviewQueue:
     """`signal_fn(candidate) -> dict` computes the weighted signals for one
     candidate; scoring itself stays a pure function (scorer.py) so it's
@@ -36,13 +55,19 @@ def scout(
     `seen`, if given, is checked/marked for every fetched candidate --
     regardless of gate band -- so a second run never re-surfaces (or lets a
     human re-approve into) the same thread.
+
+    `max_age_hours` drops threads too old to be worth answering; `now_fn` is
+    injectable so the window is testable without freezing the clock.
     """
     queue = ReviewQueue()
+    now = now_fn()
     for candidate in source.fetch(limit):
         if seen is not None:
             if seen.has(candidate.source, candidate.id):
                 continue
             seen.mark(candidate.source, candidate.id)
+        if not is_fresh(candidate, max_age_hours, now):
+            continue
         if not is_subreddit_allowed(candidate.subreddit):
             continue
         relevance_score = score(signal_fn(candidate))
@@ -95,6 +120,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help=f"max posts fetched per subreddit (default: {DEFAULT_LIMIT})",
     )
     parser.add_argument(
+        "--since-hours",
+        type=float,
+        default=None,
+        metavar="H",
+        help=(
+            "ignore threads older than H hours (default: config.MAX_AGE_HOURS, "
+            "currently 168). Use 0 to disable the window."
+        ),
+    )
+    parser.add_argument(
         "--config",
         default=DEFAULT_CONFIG_PATH,
         metavar="PATH",
@@ -103,7 +138,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             f"gate thresholds (default: {DEFAULT_CONFIG_PATH}; absent = built-in defaults)"
         ),
     )
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.since_hours is not None and args.since_hours < 0:
+        # Left unchecked this silently inverts the window: every dated
+        # candidate becomes "older than the cutoff" and the run finds nothing.
+        parser.error("--since-hours must not be negative (0 disables the window)")
+    if args.limit < 1:
+        parser.error("--limit must be at least 1")
+    return args
 
 
 def run_interactive(queue: ReviewQueue, input_fn=input, print_fn=print) -> None:
@@ -157,8 +199,22 @@ def main(argv: list[str] | None = None, print_fn=print) -> None:
             "once you have read their self-promo rules."
         )
 
+    since_hours = config.MAX_AGE_HOURS if args.since_hours is None else args.since_hours
+    max_age_hours = since_hours or None  # 0 (or 0.0) means "no window at all"
+    print_fn(
+        f"freshness window: {max_age_hours}h"
+        if max_age_hours
+        else "freshness window: disabled"
+    )
+
     seen = SeenStore("seen.json")
-    queue = scout(source, signal_fn=extract_signals, seen=seen, limit=args.limit)
+    queue = scout(
+        source,
+        signal_fn=extract_signals,
+        seen=seen,
+        limit=args.limit,
+        max_age_hours=max_age_hours,
+    )
     print_fn(f"{len(queue.pending())} candidate(s) queued for review.")
     run_interactive(queue, print_fn=print_fn)
 

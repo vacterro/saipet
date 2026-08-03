@@ -32,6 +32,12 @@ WEIGHTS = {
 GATE_IGNORE_BELOW = 60
 GATE_PRIORITIZE_AT = 80
 
+# Freshness window (T-009). A week: old threads are read, answered, and
+# dead, and replying to one is how a scout looks like a bot. A candidate
+# with no timestamp at all (created_utc == 0.0, e.g. a fixture) is kept --
+# unknown age is not evidence of age.
+MAX_AGE_HOURS = 168
+
 # Cue words for the three secondary fit signals (T-002). Keyword-based on
 # purpose: cheap, explainable, and replaceable by a real classifier later
 # without changing scorer.py's contract.
