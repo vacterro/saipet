@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.15.0 (2026-08-03)
+- Notification sinks (`saipet/notify.py`): `ConsoleNotifier` for whoever reads this process's output, `FileNotifier` appending both `notifications.jsonl` and a human-readable `inbox.md`, plus `Null` and `Multi`. Groundwork for the unattended monitor -- "print it and hope" is not a delivery mechanism for a process nobody is watching.
+- The inbox appends and never rewrites. An inbox that overwrites itself is worse than none: it looks full while losing everything before the last write.
+- No shell call and no HTTP in this module, deliberately. A notification body carries a Reddit title, so handing it to another program is the one delivery path this package must not have.
+- `MultiNotifier` collects a failing sink's error rather than raising it. One dead sink must not cost the others their message, and nothing in delivery may stop the monitor.
+
 ## v0.14.0 (2026-08-03)
 - Command engine (`python -m saipet.bridge`): a line-oriented loop over the T-013 dispatch. One line in (`scout subreddit=LocalLLaMA limit=50`), one JSON line out. A local agent, or SAIPEN, can now drive the scout over a pipe.
 - Deliberately not a shell. An unrecognised line is refused and passed nowhere -- there is no fallback that tries to run it. This process holds text fetched off the public internet, and a Reddit title reaching an execution path is a stranger's code running on your machine.

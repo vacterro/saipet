@@ -5,3 +5,5 @@ __pycache__/
 seen.json
 saipet.config.json
 runs/
+notifications.jsonl
+inbox.md
