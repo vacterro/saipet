@@ -1,6 +1,6 @@
 # SAIPET
 
-v0.6.0 -- see [CHANGELOG.md](CHANGELOG.md)
+v0.7.0 -- see [CHANGELOG.md](CHANGELOG.md)
 
 Read-only internet scout. Finds threads where people describe a real
 problem (symptom search, not brand search), scores relevance, drafts a
@@ -35,6 +35,18 @@ Without those, `saipet/cli.py` runs against an empty local fixture.
 ```
 python -m saipet.cli
 ```
+
+With credentials present this searches the configured allowlist; without
+them it runs against the empty fixture and says so. Flags:
+
+```
+python -m saipet.cli --subreddit LocalLLaMA --subreddit AI_Agents --limit 50
+```
+
+`--subreddit` is repeatable and defaults to the allowlist; `--limit` caps
+posts fetched per subreddit. Note that `config.SUBREDDIT_ALLOWLIST` is
+empty by default and default-deny: until you add a subreddit there (after
+reading its self-promo rules), every candidate is dropped before scoring.
 
 ## Test
 

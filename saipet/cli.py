@@ -4,17 +4,25 @@ Never posts anything. The only output of an approval is printed text for
 the human to paste into Reddit themselves.
 """
 
-from saipet.config import SYMPTOMS
+import argparse
+import os
+
+from saipet.config import SUBREDDIT_ALLOWLIST, SYMPTOMS
 from saipet.draft import build_draft
 from saipet.policy import is_subreddit_allowed
 from saipet.review import ReviewItem, ReviewQueue
 from saipet.scorer import gate, score
 from saipet.signals import extract_signals
 from saipet.sources.base import FixtureSource, Source
+from saipet.sources.reddit import RedditSource
 from saipet.store import SeenStore
 
+DEFAULT_LIMIT = 25
 
-def scout(source: Source, signal_fn, seen: SeenStore | None = None) -> ReviewQueue:
+
+def scout(
+    source: Source, signal_fn, seen: SeenStore | None = None, limit: int = DEFAULT_LIMIT
+) -> ReviewQueue:
     """`signal_fn(candidate) -> dict` computes the weighted signals for one
     candidate; scoring itself stays a pure function (scorer.py) so it's
     testable without a source at all.
@@ -24,7 +32,7 @@ def scout(source: Source, signal_fn, seen: SeenStore | None = None) -> ReviewQue
     human re-approve into) the same thread.
     """
     queue = ReviewQueue()
-    for candidate in source.fetch():
+    for candidate in source.fetch(limit):
         if seen is not None:
             if seen.has(candidate.source, candidate.id):
                 continue
@@ -44,6 +52,43 @@ def scout(source: Source, signal_fn, seen: SeenStore | None = None) -> ReviewQue
             )
         )
     return queue
+
+
+def build_source(subreddits: list[str], symptoms: list[str]) -> Source:
+    """Live Reddit when the user's own read credentials are in the
+    environment, the empty fixture otherwise.
+
+    The fallback is deliberate and documented in README.md: a missing
+    credential is a normal state (nobody has registered a script app yet),
+    not an error worth crashing a run over.
+    """
+    if os.environ.get("REDDIT_CLIENT_ID") and os.environ.get("REDDIT_CLIENT_SECRET"):
+        return RedditSource(subreddits, symptoms)
+    return FixtureSource([])
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="saipet",
+        description=(
+            "Read-only internet scout. Finds threads describing a real problem, "
+            "scores them, and drafts a solve-first reply for a human to approve. "
+            "Never posts anything."
+        ),
+    )
+    parser.add_argument(
+        "--subreddit",
+        action="append",
+        metavar="NAME",
+        help="subreddit to search; repeatable. Defaults to the configured allowlist.",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=DEFAULT_LIMIT,
+        help=f"max posts fetched per subreddit (default: {DEFAULT_LIMIT})",
+    )
+    return parser.parse_args(argv)
 
 
 def run_interactive(queue: ReviewQueue, input_fn=input, print_fn=print) -> None:
@@ -66,11 +111,30 @@ def run_interactive(queue: ReviewQueue, input_fn=input, print_fn=print) -> None:
             print_fn("Approved -- not posted. Copy the text above manually.")
 
 
-def main() -> None:
-    print(f"symptom vocabulary: {', '.join(SYMPTOMS)}")
-    print("No live source wired yet (needs REDDIT_CLIENT_ID/SECRET) -- using empty fixture.")
+def main(argv: list[str] | None = None, print_fn=print) -> None:
+    args = parse_args(argv)
+    subreddits = args.subreddit or sorted(SUBREDDIT_ALLOWLIST)
+    source = build_source(subreddits, SYMPTOMS)
+
+    print_fn(f"source: {source.name}")
+    print_fn(f"subreddits: {', '.join(subreddits) if subreddits else '(none)'}")
+    print_fn(f"symptom vocabulary: {', '.join(SYMPTOMS)}")
+    if source.name == FixtureSource.name:
+        print_fn(
+            "No REDDIT_CLIENT_ID/REDDIT_CLIENT_SECRET in the environment "
+            "-- running against the empty fixture, nothing will be fetched."
+        )
+    if not SUBREDDIT_ALLOWLIST:
+        print_fn(
+            "WARNING: the subreddit allowlist is empty, so policy drops every "
+            "candidate before scoring. Add subreddits to config.SUBREDDIT_ALLOWLIST "
+            "once you have read their self-promo rules."
+        )
+
     seen = SeenStore("seen.json")
-    run_interactive(scout(FixtureSource([]), signal_fn=extract_signals, seen=seen))
+    queue = scout(source, signal_fn=extract_signals, seen=seen, limit=args.limit)
+    print_fn(f"{len(queue.pending())} candidate(s) queued for review.")
+    run_interactive(queue, print_fn=print_fn)
 
 
 if __name__ == "__main__":
