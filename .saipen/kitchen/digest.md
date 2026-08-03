@@ -1,3 +1,3 @@
-done: v0.7.0 -- T-007 gave SAIPET a live run path (real RedditSource when credentials exist, `--subreddit`/`--limit`), 31/31 tests green, committed 1457550 local-only.
-remaining: T-008 runtime config file, then T-009 freshness window, T-010 resilient fetch, T-011 run report, T-012 non-interactive mode, T-013 control-plane dispatch, T-014 terminal engine.
-awaiting: nothing.
+done: goal run complete -- 8 tickets, v0.7.0 to v0.14.0. Scout now actually runs live (T-007), is tunable from a config file (T-008), skips stale threads (T-009), survives a dead subreddit (T-010), persists every run (T-011) and runs unattended (T-012). Control plane added: Bridge.dispatch (T-013) and the `python -m saipet.bridge` command engine (T-014). 120/120 tests green, all commits local-only.
+remaining: nothing on the board.
+awaiting: nothing. Reddit credentials + a subreddit allowlist are what stand between this and a real live run; both are the user's call, not a blocker.
