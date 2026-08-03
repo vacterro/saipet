@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.13.0 (2026-08-03)
+- Control-plane seam (`saipet/bridge/`): `Bridge.dispatch(verb, **args)` gives an external agent a stable way to drive SAIPET -- `scout`, `report`, `status`, `queue`, `approve` -- returning structured results instead of printed text. `cli.main()` remains a script; nothing has to scrape its stdout any more.
+- The verb set is closed and resolved through a fixed table, never `getattr`. Everything this bridge acts on originates on the public internet, so dynamic resolution would turn "fetched some posts" into "ran what a stranger wrote". An unknown verb is refused with nothing executed.
+- `approve` requires a human-written solution, returns the draft and `posted: False`. As everywhere else in this codebase, posting stays a manual human action.
+- A second static scan now fails the build on any execution primitive anywhere in `saipet/`, alongside the existing no-write-endpoint scan.
+
 ## v0.12.0 (2026-08-03)
 - `--report-only`: fetch, score, gate and write the report, then stop. No prompts, so a scheduled or agent-driven run has nothing to block on.
 - `main()` now takes an injectable `input_fn`, which is what makes the no-stdin promise testable rather than merely stated.
