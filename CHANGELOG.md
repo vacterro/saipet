@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.10.0 (2026-08-03)
+- Resilient fetch: subreddits now fail independently. A private, banned, misspelled or rate-limited one is retried (2 retries, doubling backoff) and then recorded, instead of aborting the whole run and losing every subreddit after it.
+- Give-ups land in `RedditSource.last_failures` and the CLI prints a WARNING for each. A subreddit that answered nothing and one that could not be reached are different facts and no longer look identical.
+
 ## v0.9.0 (2026-08-03)
 - Freshness window: `scout()` now drops threads older than `config.MAX_AGE_HOURS` (default 168 = one week) before scoring them. Old threads are already read and answered, and replying to one is how a scout starts looking like a bot. `created_utc` had been stored on every candidate and never used.
 - `--since-hours H` overrides the window per run; `0` disables it. A candidate whose source gave no timestamp is kept -- unknown age is not evidence of age.

@@ -215,6 +215,11 @@ def main(argv: list[str] | None = None, print_fn=print) -> None:
         limit=args.limit,
         max_age_hours=max_age_hours,
     )
+    for subreddit, error in getattr(source, "last_failures", []):
+        # Never silent: a subreddit that answered nothing and a subreddit that
+        # could not be reached look identical in the queue.
+        print_fn(f"WARNING: {subreddit} could not be fetched -- {error}")
+
     print_fn(f"{len(queue.pending())} candidate(s) queued for review.")
     run_interactive(queue, print_fn=print_fn)
 
