@@ -1,4 +1,4 @@
-from saipet.config import GATE_IGNORE_BELOW, GATE_PRIORITIZE_AT, WEIGHTS
+from saipet import config
 
 
 def score(signals: dict) -> float:
@@ -9,7 +9,7 @@ def score(signals: dict) -> float:
     one runaway signal can't blow past what the others allow.
     """
     total = 0.0
-    for key, weight in WEIGHTS.items():
+    for key, weight in config.WEIGHTS.items():
         value = signals.get(key, 0.0)
         if weight < 0:
             magnitude = max(0.0, min(-weight, value))
@@ -20,9 +20,14 @@ def score(signals: dict) -> float:
 
 
 def gate(relevance_score: float) -> str:
-    """Map a score to the three-band decision: ignore / review / priority."""
-    if relevance_score < GATE_IGNORE_BELOW:
+    """Map a score to the three-band decision: ignore / review / priority.
+
+    Read off the config module rather than imported by name: the two
+    thresholds are plain ints, so a runtime override (runtime_config.py)
+    cannot reach a by-value import of them.
+    """
+    if relevance_score < config.GATE_IGNORE_BELOW:
         return "ignore"
-    if relevance_score < GATE_PRIORITIZE_AT:
+    if relevance_score < config.GATE_PRIORITIZE_AT:
         return "review"
     return "priority"

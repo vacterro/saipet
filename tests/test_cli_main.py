@@ -59,6 +59,18 @@ def test_main_warns_when_the_allowlist_is_empty(monkeypatch, tmp_path, _no_creds
     assert any("empty fixture" in line for line in lines)
 
 
+def test_main_reports_a_broken_config_file_without_a_traceback(monkeypatch, tmp_path, _no_creds):
+    (tmp_path / "saipet.config.json").write_text('{"symptomz": ["x"]}', encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    lines: list[str] = []
+
+    with pytest.raises(SystemExit) as exit_info:
+        main([], print_fn=lines.append)
+
+    assert exit_info.value.code == 2
+    assert any("config error: unknown config key 'symptomz'" in line for line in lines)
+
+
 def test_main_does_not_warn_once_the_allowlist_has_entries(monkeypatch, tmp_path, _no_creds):
     monkeypatch.setattr("saipet.cli.SUBREDDIT_ALLOWLIST", {"testsub"})
     monkeypatch.chdir(tmp_path)

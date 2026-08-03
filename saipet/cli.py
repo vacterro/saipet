@@ -11,6 +11,12 @@ from saipet.config import SUBREDDIT_ALLOWLIST, SYMPTOMS
 from saipet.draft import build_draft
 from saipet.policy import is_subreddit_allowed
 from saipet.review import ReviewItem, ReviewQueue
+from saipet.runtime_config import (
+    DEFAULT_CONFIG_PATH,
+    ConfigError,
+    apply_overrides,
+    load_overrides,
+)
 from saipet.scorer import gate, score
 from saipet.signals import extract_signals
 from saipet.sources.base import FixtureSource, Source
@@ -88,6 +94,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=DEFAULT_LIMIT,
         help=f"max posts fetched per subreddit (default: {DEFAULT_LIMIT})",
     )
+    parser.add_argument(
+        "--config",
+        default=DEFAULT_CONFIG_PATH,
+        metavar="PATH",
+        help=(
+            "JSON file overriding symptoms, subreddit_allowlist, weights and the "
+            f"gate thresholds (default: {DEFAULT_CONFIG_PATH}; absent = built-in defaults)"
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -113,6 +128,17 @@ def run_interactive(queue: ReviewQueue, input_fn=input, print_fn=print) -> None:
 
 def main(argv: list[str] | None = None, print_fn=print) -> None:
     args = parse_args(argv)
+
+    try:
+        applied = apply_overrides(load_overrides(args.config))
+    except ConfigError as exc:
+        # A broken config file is a user mistake with an obvious fix, not a
+        # crash worth a traceback.
+        print_fn(f"config error: {exc}")
+        raise SystemExit(2) from exc
+    if applied:
+        print_fn(f"config: {args.config} overrides {', '.join(applied)}")
+
     subreddits = args.subreddit or sorted(SUBREDDIT_ALLOWLIST)
     source = build_source(subreddits, SYMPTOMS)
 

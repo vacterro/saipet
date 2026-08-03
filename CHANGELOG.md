@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.8.0 (2026-08-03)
+- Runtime config file (`saipet/runtime_config.py`): an optional `saipet.config.json` overrides the symptom vocabulary, the subreddit allowlist, the signal weights and both gate thresholds without editing the installed package. No file means the shipped defaults, unchanged.
+- Overrides are validated in full before any of them is applied, so one bad entry can never leave a half-applied configuration; unknown keys and unknown weight names are refused rather than silently ignored.
+- `python -m saipet.cli --config PATH` selects a different file; a broken one prints one line and exits 2 instead of a traceback.
+
 ## v0.7.0 (2026-08-03)
 - Live run path: `python -m saipet.cli` now builds a real `RedditSource` when `REDDIT_CLIENT_ID`/`REDDIT_CLIENT_SECRET` are in the environment, and falls back to the empty fixture otherwise. Until now `main()` always used the fixture, so no live scout run was possible at all.
 - CLI flags: `--subreddit NAME` (repeatable, defaults to the configured allowlist) and `--limit N` (posts fetched per subreddit). `scout()` now honours the caller's limit instead of the source's default.

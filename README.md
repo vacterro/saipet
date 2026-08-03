@@ -1,6 +1,6 @@
 # SAIPET
 
-v0.7.0 -- see [CHANGELOG.md](CHANGELOG.md)
+v0.8.0 -- see [CHANGELOG.md](CHANGELOG.md)
 
 Read-only internet scout. Finds threads where people describe a real
 problem (symptom search, not brand search), scores relevance, drafts a
@@ -44,9 +44,26 @@ python -m saipet.cli --subreddit LocalLLaMA --subreddit AI_Agents --limit 50
 ```
 
 `--subreddit` is repeatable and defaults to the allowlist; `--limit` caps
-posts fetched per subreddit. Note that `config.SUBREDDIT_ALLOWLIST` is
-empty by default and default-deny: until you add a subreddit there (after
-reading its self-promo rules), every candidate is dropped before scoring.
+posts fetched per subreddit.
+
+## Tuning
+
+Drop a `saipet.config.json` next to where you run (or point `--config` at
+one) to retune without editing the package:
+
+```json
+{
+  "subreddit_allowlist": ["LocalLLaMA", "AI_Agents"],
+  "symptoms": ["lost context", "handoff", "resume"],
+  "weights": { "problem_match": 45 },
+  "gate_ignore_below": 60,
+  "gate_prioritize_at": 80
+}
+```
+
+The allowlist is empty by default and default-deny: until a subreddit is
+listed (after you have read its self-promo rules), every candidate from it
+is dropped before scoring. Unknown keys are refused, not ignored.
 
 ## Test
 
