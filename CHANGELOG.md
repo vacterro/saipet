@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.16.0 (2026-08-03)
+- Monitor loop (`saipet/monitor.py`): `run_monitor()` scouts on an interval and notifies on whatever is new. Everything else here is something you run; this is the thing you leave running.
+- It drives the bridge rather than reaching into `cli.scout`, so the background loop and an external agent go through exactly one code path instead of two that drift.
+- `cycles=None` runs forever and any integer bounds it, which makes a one-shot run, a test and the daemon the same code. No sleep after the final bounded cycle.
+- Deduplication needs nothing new: the seen-store already means a later scout never re-surfaces a thread, so the queue after a cycle is that cycle's findings.
+
 ## v0.15.0 (2026-08-03)
 - Notification sinks (`saipet/notify.py`): `ConsoleNotifier` for whoever reads this process's output, `FileNotifier` appending both `notifications.jsonl` and a human-readable `inbox.md`, plus `Null` and `Multi`. Groundwork for the unattended monitor -- "print it and hope" is not a delivery mechanism for a process nobody is watching.
 - The inbox appends and never rewrites. An inbox that overwrites itself is worse than none: it looks full while losing everything before the last write.
