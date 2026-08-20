@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.24.0 (2026-08-03)
+- **Fixed: the monitor starts silently when it has nothing it can actually reach.** Missing Reddit credentials without `--subreddit` flags or an empty subreddit allowlist without `--subreddit` flags now exits non-zero with a clear message instead of running forever and producing indistinguishable silence from a dead process.
+- `--fixture` is the explicit opt-in for a credential-less run: passing it skips the startup checks so the monitor can still be used in tests and controlled environments without real credentials.
+- A monitor that starts with `--fixture` and no subreddits prints a warning but still runs (testing the loop shape is a valid use case).
+
 ## v0.23.0 (2026-08-03)
 - **Fixed: a newline in a Reddit title forges a second NOTIFY line on stdout.** Console and inbox sinks now sanitize untrusted text at the output boundary rather than trusting fetched content.
 - Control characters (including tab, CR, LF) are stripped from console output; ANSI escape sequences are removed. Raw text is kept intact in the JSONL feed so an agent can still read the original.

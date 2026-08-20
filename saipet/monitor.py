@@ -15,6 +15,7 @@ a one-shot run and a test are the same code as the daemon.
 """
 
 import argparse
+import os
 import time
 from dataclasses import dataclass, field
 
@@ -237,6 +238,42 @@ def _run_one_cycle(bridge, sink, tracker, args, min_score, now) -> str:
         return f"{type(exc).__name__}: {exc}"
 
 
+def _has_credentials() -> bool:
+    return bool(os.environ.get("REDDIT_CLIENT_ID")) and bool(os.environ.get("REDDIT_CLIENT_SECRET"))
+
+
+def _refuse_to_run_forever(args, subreddits: list[str], fixture: bool, print_fn=print) -> None:
+    """Exit non-zero when the monitor has nothing it can actually reach.
+
+    A daemon that starts silently with no credentials and an empty allowlist
+    is a process that sleeps forever, writes one heartbeat per interval, and
+    cannot be distinguished from a dead one. It should not get that far.
+    """
+    has_creds = _has_credentials()
+    explicit_subreddits = bool(args.subreddit)
+
+    if fixture:
+        return
+
+    if not has_creds and not explicit_subreddits:
+        msg = (
+            "no Reddit credentials in the environment and no --subreddit "
+            "flags given -- the daemon would find nothing and could not be "
+            "told apart from a dead one. Set REDDIT_CLIENT_ID/SECRET or use "
+            "--fixture to opt into a credential-less run."
+        )
+        print_fn(msg)
+        raise SystemExit(1)
+
+    if not subreddits:
+        msg = (
+            "the subreddit allowlist is empty and no --subreddit flags were "
+            "given -- add subreddits to config or pass them on the command line"
+        )
+        print_fn(msg)
+        raise SystemExit(1)
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="saipet-monitor",
@@ -285,6 +322,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--report-dir", default=DEFAULT_REPORT_DIR, metavar="DIR")
     parser.add_argument("--config", default=DEFAULT_CONFIG_PATH, metavar="PATH")
     parser.add_argument("--quiet", action="store_true", help="file sink only, nothing on stdout")
+    parser.add_argument(
+        "--fixture",
+        action="store_true",
+        help=(
+            "explicitly opt into a credential-less run against the empty fixture; "
+            "without this flag, missing credentials or an empty allowlist is a startup error"
+        ),
+    )
 
     args = parser.parse_args(argv)
     if args.interval <= 0:
@@ -324,6 +369,10 @@ def main(argv: list[str] | None = None, print_fn=print, **run_kwargs) -> Monitor
         print_fn(f"config: {args.config} overrides {', '.join(applied)}")
 
     subreddits = args.subreddit or sorted(config.SUBREDDIT_ALLOWLIST)
+    fixture = args.fixture
+
+    _refuse_to_run_forever(args, subreddits, fixture, print_fn=print_fn)
+
     bridge = Bridge(report_dir=args.report_dir, source_factory=build_source)
     notifier = build_notifier(args.notify_file, args.quiet, print_fn=print_fn)
 
@@ -332,11 +381,8 @@ def main(argv: list[str] | None = None, print_fn=print, **run_kwargs) -> Monitor
         f"subreddits {', '.join(subreddits) if subreddits else '(none)'}, "
         f"reporting at or above {config.NOTIFY_MIN_SCORE if args.min_score is None else args.min_score}"
     )
-    if not subreddits:
-        print_fn(
-            "WARNING: no subreddits to watch -- the allowlist is empty, so every "
-            "cycle will find nothing. Add some to the config file first."
-        )
+    if fixture and not subreddits:
+        print_fn("WARNING: --fixture with no subreddits -- the monitor will find nothing")
 
     scout_args: dict = {"limit": args.limit}
     if subreddits:

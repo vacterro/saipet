@@ -122,14 +122,65 @@ def test_quiet_keeps_findings_off_stdout(tmp_path, monkeypatch, _one_finding):
     assert (tmp_path / "notifications.jsonl").exists()
 
 
-def test_an_empty_allowlist_is_called_out_rather_than_looking_quiet(tmp_path, monkeypatch):
+def test_an_empty_allowlist_without_fixture_exits_nonzero(tmp_path, monkeypatch):
+    monkeypatch.setattr("saipet.config.SUBREDDIT_ALLOWLIST", set())
+    monkeypatch.setenv("REDDIT_CLIENT_ID", "x")
+    monkeypatch.setenv("REDDIT_CLIENT_SECRET", "y")
+    monkeypatch.chdir(tmp_path)
+    lines: list[str] = []
+
+    with pytest.raises(SystemExit) as exit_info:
+        main(["--cycles", "1"], print_fn=lines.append, sleep_fn=lambda _s: None, now_fn=lambda: NOW)
+
+    assert exit_info.value.code != 0
+    assert any("allowlist is empty" in line for line in lines)
+
+
+def test_an_empty_allowlist_with_fixture_warns_and_runs(tmp_path, monkeypatch):
     monkeypatch.setattr("saipet.config.SUBREDDIT_ALLOWLIST", set())
     monkeypatch.chdir(tmp_path)
     lines: list[str] = []
 
-    main(["--cycles", "1"], print_fn=lines.append, sleep_fn=lambda _s: None, now_fn=lambda: NOW)
+    state = main(
+        ["--cycles", "1", "--fixture"],
+        print_fn=lines.append,
+        sleep_fn=lambda _s: None,
+        now_fn=lambda: NOW,
+    )
 
-    assert any("no subreddits to watch" in line for line in lines)
+    assert state.cycles == 1
+    assert any("--fixture with no subreddits" in line for line in lines)
+
+
+def test_no_credentials_without_fixture_exits_nonzero(tmp_path, monkeypatch):
+    monkeypatch.delenv("REDDIT_CLIENT_ID", raising=False)
+    monkeypatch.delenv("REDDIT_CLIENT_SECRET", raising=False)
+    monkeypatch.setattr("saipet.config.SUBREDDIT_ALLOWLIST", {"testsub"})
+    monkeypatch.chdir(tmp_path)
+    lines: list[str] = []
+
+    with pytest.raises(SystemExit) as exit_info:
+        main(["--cycles", "1"], print_fn=lines.append, sleep_fn=lambda _s: None, now_fn=lambda: NOW)
+
+    assert exit_info.value.code != 0
+    assert any("no Reddit credentials" in line for line in lines)
+
+
+def test_no_credentials_with_fixture_warns_and_runs(tmp_path, monkeypatch):
+    monkeypatch.delenv("REDDIT_CLIENT_ID", raising=False)
+    monkeypatch.delenv("REDDIT_CLIENT_SECRET", raising=False)
+    monkeypatch.setattr("saipet.config.SUBREDDIT_ALLOWLIST", {"testsub"})
+    monkeypatch.chdir(tmp_path)
+    lines: list[str] = []
+
+    state = main(
+        ["--cycles", "1", "--fixture"],
+        print_fn=lines.append,
+        sleep_fn=lambda _s: None,
+        now_fn=lambda: NOW,
+    )
+
+    assert state.cycles == 1
 
 
 def test_a_broken_config_file_exits_cleanly(tmp_path, monkeypatch):
