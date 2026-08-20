@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.23.0 (2026-08-03)
+- **Fixed: a newline in a Reddit title forges a second NOTIFY line on stdout.** Console and inbox sinks now sanitize untrusted text at the output boundary rather than trusting fetched content.
+- Control characters (including tab, CR, LF) are stripped from console output; ANSI escape sequences are removed. Raw text is kept intact in the JSONL feed so an agent can still read the original.
+- Markdown metacharacters (`*`, `` ` ``, `_`, `[`, `]`, etc.) are escaped in the markdown inbox so a title carrying formatting does not shift rendering.
+- Permalinks are validated as https URLs before being rendered in the inbox; non-https or malformed URLs are dropped silently.
+
+## v0.22.0 (2026-08-03)
+- **Fixed: heartbeat printed cumulative counts instead of per-cycle counts.** `MonitorState` now carries separate `this_cycle` and `total` counters for both `queued` and `notified`. The heartbeat reports the number from the current cycle only, and a failed cycle cannot republish the last good cycle's numbers because the per-cycle fields are reset before the work starts.
+- The ambiguous bare names `queued` and `notified` are removed from `as_dict()` rather than aliased: keeping an alias would preserve exactly the bug that made "cycle 2: 2 new candidate(s)" when each cycle found one.
+
 ## v0.21.0 (2026-08-03)
 - **Fixed: a total Reddit outage counted as a healthy cycle.** A scout that reached none of its subreddits returned an empty list with `ok: True`, which is byte-identical to a quiet night -- so expired keys or a 403 across the board produced `errors: 0` and a cheerful heartbeat indefinitely.
 - Sources now report `FetchHealth`: targets attempted versus failed, resolving to `healthy`, `degraded` or `failed`. The verdict is made where the target count is known rather than inferred downstream from a failure list whose emptiness also means "nothing was configured".

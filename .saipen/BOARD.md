@@ -1,6 +1,7 @@
 # Board
 ## DOING
-- [/] T-023 [P0] Sanitise untrusted text at the output boundary: strip CR/LF, ANSI and control characters for the console sink, escape markdown for the inbox, validate `permalink` as an https URL, keep raw text only in JSON. A Reddit title with a newline currently forges a second NOTIFY line on stdout. | needs: T-021 | owner: claude-opus | claim_time: 2026-08-03T15:30:00Z | verify: test with a title carrying \n, an ANSI escape and markdown metacharacters asserts one console line and no injected markup
+- [x] T-023 [P0] Sanitise untrusted text at the output boundary: strip CR/LF, ANSI and control characters for the console sink, escape markdown for the inbox, validate `permalink` as an https URL, keep raw text only in JSON. A Reddit title with a newline currently forges a second NOTIFY line on stdout. | needs: T-021 | owner: claude-opus | claim_time: 2026-08-03T15:30:00Z | verify: test with a title carrying \n, an ANSI escape and markdown metacharacters asserts one console line and no injected markup | review_passes: 1 | shipped: v0.23.0
+- [ ] T-024 [P0] The daemon refuses to run blind: missing Reddit credentials or an empty allowlist is a startup error, not a warning it then ignores forever. `--fixture` is the explicit opt-in for a credential-less run. | needs: T-021 | verify: test that monitor.main() without credentials exits non-zero, and with --fixture does not
 
 ## TODO
 - [ ] T-024 [P0] The daemon refuses to run blind: missing Reddit credentials or an empty allowlist is a startup error, not a warning it then ignores forever. `--fixture` is the explicit opt-in for a credential-less run. | needs: T-021 | verify: test that monitor.main() without credentials exits non-zero, and with --fixture does not

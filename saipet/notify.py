@@ -19,12 +19,61 @@ endpoint, not to a default.
 """
 
 import json
+import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlparse
 
 DEFAULT_NOTIFICATION_FILE = "notifications.jsonl"
 DEFAULT_INBOX_FILE = "inbox.md"
+
+# Unicode categories for control characters we want to drop: Cc (control),
+# Cf (format), Cs (surrogate), Co (private use), Cn (unassigned).
+_CONTROL_RE = re.compile(r"[\x00-\x0d\x0e-\x1f\x7f\uFFF0-\uFFFF]")
+# ANSI escape sequences: ESC[ ... any printable bytes ... m, x, K, etc.
+_ANSI_RE = re.compile(r"\x1b\[[\d;]*[A-Za-z]")
+
+
+def _strip_untrusted(text: str) -> str:
+    """Strip characters that break structured text output.
+
+    Console sinks treat each notification as one line. A title carrying a
+    literal newline, tab, carriage return, or ANSI escape sequence would
+    forge extra output the driver has to parse around. Drop the noise
+    before it reaches the line boundary.
+    """
+    text = _ANSI_RE.sub("", text)
+    text = _CONTROL_RE.sub(" ", text)
+    return text.strip()
+
+
+def _escape_markdown(text: str) -> str:
+    """Escape markdown metacharacters so rendered inbox stays literal.
+
+    The inbox is human-readable markdown; a Reddit title containing `*`,
+    `_`, `[`, `]`, or `` ` `` would shift formatting. Escape them so the
+    inbox displays exactly what the title says.
+    """
+    for ch in r"\*`_[]()>#-+.!|":
+        text = text.replace(ch, "\\" + ch)
+    return text
+
+
+def _validate_permalink(url: str | None) -> str | None:
+    """Return the URL only when it looks like a real https link.
+
+    Permalinks come off the public internet. A malformed or non-https URL
+    turned into an `<href>` is a trust boundary violation.
+    """
+    if not url or not isinstance(url, str):
+        return None
+    parsed = urlparse(url)
+    if parsed.scheme not in ("https",):
+        return None
+    if not parsed.netloc:
+        return None
+    return url
 
 
 @dataclass(frozen=True)
@@ -112,7 +161,8 @@ class ConsoleNotifier(Notifier):
 
     def send(self, notification: Notification) -> None:
         stamp = time.strftime("%Y-%m-%d %H:%M:%SZ", time.gmtime(notification.at))
-        self._print(f"{self._prefix} {stamp} {notification.kind}: {notification.text}")
+        line = f"{self._prefix} {stamp} {notification.kind}: {_strip_untrusted(notification.text)}"
+        self._print(line)
 
 
 class FileNotifier(Notifier):
@@ -136,8 +186,8 @@ class FileNotifier(Notifier):
             handle.write(json.dumps(notification.as_dict(), ensure_ascii=False) + "\n")
 
         stamp = time.strftime("%Y-%m-%d %H:%M:%SZ", time.gmtime(notification.at))
-        line = f"- `{stamp}` **{notification.kind}** -- {notification.text}"
-        permalink = notification.data.get("permalink")
+        line = f"- `{stamp}` **{_escape_markdown(notification.kind)}** -- {_escape_markdown(notification.text)}"
+        permalink = _validate_permalink(notification.data.get("permalink"))
         if permalink:
             line += f" <{permalink}>"
         with self.inbox_path.open("a", encoding="utf-8") as handle:

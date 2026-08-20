@@ -174,3 +174,9 @@
 - 03.08.26 15:29 [E-173] [parent: E-172] [T-022] RUN: pytest -q -> 215 passed. Reported defect covered directly: two cycles finding one candidate each now read "cycle 1: 1 new candidate(s)" / "cycle 2: 1 new candidate(s)", previously 1 then 2. conf: high.
 - 03.08.26 15:29 [E-174] [parent: E-173] [T-022] DEC: goal_tickets 1->2
 - 03.08.26 15:29 [E-175] [parent: E-174] [T-022] DEC: REVIEW pass 1 -- no P0/P1. A test asserts the bare `queued`/`notified` keys are absent from `as_dict()` rather than merely renamed: keeping an alias would preserve the exact ambiguity the ticket removed. DEC: SHIP.
+- 03.08.26 15:42 [E-176] [T-022] RUN: ship v0.22.0 -> committed 75df304 locally; VERSION deferred to next combined ship.
+- 03.08.26 15:43 [E-177] [parent: E-176] [T-023] DEC: SHIP -> DONE (T-022). DONE -> SCOUT; claim T-023; owner claude-opus.
+- 03.08.26 15:43 [E-178] [parent: E-177] [T-023] RUN: SCOUT -> build _strip_untrusted, _escape_markdown, _validate_permalink; wire into ConsoleNotifier and FileNotifier. SCOUT -> BUILD.
+- 03.08.26 15:44 [E-179] [parent: E-178] [T-023] RUN: BUILD -> 10 new tests covering newline-in-title, ANSI in title, control char, raw text preserved in JSONL, markdown escaped in inbox, non-https permalink dropped, missing permalink harmless, stripping edge cases, escaping preserves safe chars, validate accepts only https. First run: 2 failures — _CONTROL_RE missed \t/\n/\r; fixed by expanding range to \x00-\x0d. Second run: 225/225 green. conf: high.
+- 03.08.26 15:45 [E-180] [parent: E-179] [T-023] DEC: goal_tickets 2->3. DEC: REVIEW pass 1 -- no P0/P1. Raw text in JSONL data stays untouched; sanitization is sink-level only. DEC: SHIP.
+- 03.08.26 15:45 [E-181] [parent: E-180] [T-023] RUN: ship v0.23.0 -> VERSION + CHANGELOG updated; committed locally.
