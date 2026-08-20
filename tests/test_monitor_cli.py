@@ -84,7 +84,7 @@ def test_one_cycle_writes_a_report_and_a_notification(tmp_path, monkeypatch, _on
     )
 
     assert state.cycles == 1
-    assert state.notified == 1
+    assert state.notified_total == 1
     assert list((tmp_path / "runs").glob("*.jsonl"))  # the run report
     feed = (tmp_path / "notifications.jsonl").read_text(encoding="utf-8").splitlines()
     kinds = [json.loads(line)["kind"] for line in feed]

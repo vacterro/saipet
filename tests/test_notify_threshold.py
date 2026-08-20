@@ -85,8 +85,8 @@ def test_only_the_strong_finding_notifies(bridge):
         bridge, notifier=sink, cycles=1, sleep_fn=lambda _s: None, now_fn=lambda: NOW
     )
 
-    assert state.queued == 2
-    assert state.notified == 1
+    assert state.queued_total == 2
+    assert state.notified_total == 1
     assert [n.data["id"] for n in sink.sent] == ["strong"]
 
 
@@ -97,7 +97,7 @@ def test_dropping_the_bar_lets_everything_through(bridge):
         bridge, notifier=sink, cycles=1, min_score=0, sleep_fn=lambda _s: None, now_fn=lambda: NOW
     )
 
-    assert state.notified == 2
+    assert state.notified_total == 2
 
 
 def test_raising_the_bar_silences_everything(bridge):
@@ -107,8 +107,8 @@ def test_raising_the_bar_silences_everything(bridge):
         bridge, notifier=sink, cycles=1, min_score=101, sleep_fn=lambda _s: None, now_fn=lambda: NOW
     )
 
-    assert state.queued == 2
-    assert state.notified == 0
+    assert state.queued_total == 2
+    assert state.notified_total == 0
     assert sink.sent == []
 
 

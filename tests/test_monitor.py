@@ -73,7 +73,7 @@ def test_three_bounded_cycles_notify_and_sleep(make_bridge):
     )
 
     assert state.cycles == 3
-    assert state.notified == 3
+    assert state.notified_total == 3
     assert [n.data["id"] for n in sink.sent] == ["a", "b", "c"]
     assert sleeps == [900, 900]  # no nap after the final cycle
 
@@ -102,7 +102,7 @@ def test_an_already_seen_thread_is_not_notified_twice(make_bridge):
         bridge, notifier=sink, cycles=2, sleep_fn=lambda _s: None, now_fn=lambda: NOW
     )
 
-    assert state.notified == 1
+    assert state.notified_total == 1
     assert len(sink.sent) == 1
 
 
@@ -114,7 +114,7 @@ def test_a_quiet_cycle_notifies_nothing(make_bridge):
     )
 
     assert state.cycles == 1
-    assert state.notified == 0
+    assert state.notified_total == 0
     assert sink.sent == []
 
 
@@ -177,7 +177,7 @@ def test_no_notifier_is_a_legal_run(make_bridge):
     state = run_monitor(
         make_bridge([[_candidate("a")]]), cycles=1, sleep_fn=lambda _s: None, now_fn=lambda: NOW
     )
-    assert state.notified == 1
+    assert state.notified_total == 1
 
 
 def test_the_console_sink_works_end_to_end(make_bridge):

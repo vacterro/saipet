@@ -1,7 +1,7 @@
 ---
-phase: SHIP
-task: T-021
-next_action: "PHASE SHIP T-021"
+phase: BUILD
+task: T-022
+next_action: "PHASE BUILD T-022"
 blocker: none
 agent: claude-opus
 saipen_version: 7
@@ -12,7 +12,7 @@ mode: full
 goal_mode: true
 goal_waves: 1
 goal_tickets: 1
-transition_from: REVIEW
-last_event: 168
-updated: 2026-08-03T15:27:00Z
+transition_from: SCOUT
+last_event: 171
+updated: 2026-08-03T15:28:00Z
 ---

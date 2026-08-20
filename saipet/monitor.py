@@ -56,8 +56,13 @@ class MonitorState:
     """
 
     cycles: int = 0
-    notified: int = 0
-    queued: int = 0
+    # Per-cycle and cumulative are separate fields, not one ambiguous name.
+    # The heartbeat used to print the running total under the words "N new
+    # candidate(s)", so a second cycle finding one thing reported two.
+    notified_this_cycle: int = 0
+    notified_total: int = 0
+    queued_this_cycle: int = 0
+    queued_total: int = 0
     last_cycle_at: float | None = None
     last_error: str = ""
     errors: int = 0
@@ -69,8 +74,10 @@ class MonitorState:
     def as_dict(self) -> dict:
         return {
             "cycles": self.cycles,
-            "notified": self.notified,
-            "queued": self.queued,
+            "notified_this_cycle": self.notified_this_cycle,
+            "notified_total": self.notified_total,
+            "queued_this_cycle": self.queued_this_cycle,
+            "queued_total": self.queued_total,
             "last_cycle_at": self.last_cycle_at,
             "last_error": self.last_error,
             "errors": self.errors,
@@ -138,6 +145,10 @@ def run_monitor(
         cycle = tracker.cycles
         now = now_fn()
         tracker.last_cycle_at = now
+        # Reset before the work, not after: a failed cycle that kept the
+        # previous cycle's numbers would report them again as its own.
+        tracker.queued_this_cycle = 0
+        tracker.notified_this_cycle = 0
 
         failure = _run_one_cycle(bridge, sink, tracker, args, min_score, now)
         if failure:
@@ -154,7 +165,7 @@ def run_monitor(
                 tracker.degraded_cycles += 1
                 _send_quietly(sink, degraded(tracker.last_degradation, cycle, now))
             if heartbeat_every and cycle % heartbeat_every == 0:
-                _send_quietly(sink, heartbeat(cycle, tracker.queued, now))
+                _send_quietly(sink, heartbeat(cycle, tracker.queued_this_cycle, now))
 
         last_cycle = cycles is not None and ran >= cycles
         if not last_cycle:
@@ -211,13 +222,15 @@ def _run_one_cycle(bridge, sink, tracker, args, min_score, now) -> str:
             return listed.error
 
         items = listed.data.get("items", [])
-        tracker.queued += len(items)
+        tracker.queued_this_cycle = len(items)
+        tracker.queued_total += len(items)
         bar = config.NOTIFY_MIN_SCORE if min_score is None else min_score
         for item in items:
             if not is_notify_worthy(item, bar):
                 continue
             _send_quietly(sink, finding(item, now))
-            tracker.notified += 1
+            tracker.notified_this_cycle += 1
+            tracker.notified_total += 1
             tracker.findings.append(item)
         return ""
     except Exception as exc:  # noqa: BLE001 -- see the docstring above

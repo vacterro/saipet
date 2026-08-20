@@ -62,7 +62,7 @@ def test_watch_runs_the_cycles_and_hands_back_what_it_found(make_bridge):
 
     assert result.ok
     assert result.data["monitor"]["cycles"] == 2
-    assert result.data["monitor"]["notified"] == 2
+    assert result.data["monitor"]["notified_total"] == 2
     assert [f["id"] for f in result.data["findings"]] == ["a", "b"]
 
 
@@ -75,7 +75,7 @@ def test_status_then_reports_the_monitor(make_bridge):
     monitor = bridge.dispatch("status").data["monitor"]
 
     assert monitor["cycles"] == 1
-    assert monitor["notified"] == 1
+    assert monitor["notified_total"] == 1
     assert monitor["last_cycle_at"] == NOW
     assert monitor["errors"] == 0
 
@@ -124,8 +124,8 @@ def test_a_weak_finding_does_not_reach_the_notifier(make_bridge):
 
     result = bridge.dispatch("watch", cycles=1)
 
-    assert result.data["monitor"]["queued"] == 1
-    assert result.data["monitor"]["notified"] == 0
+    assert result.data["monitor"]["queued_total"] == 1
+    assert result.data["monitor"]["notified_total"] == 0
 
 
 def test_the_min_score_argument_wins_over_the_config(make_bridge):
@@ -142,7 +142,7 @@ def test_the_min_score_argument_wins_over_the_config(make_bridge):
 
     result = bridge.dispatch("watch", cycles=1, min_score=0)
 
-    assert result.data["monitor"]["notified"] == 1
+    assert result.data["monitor"]["notified_total"] == 1
 
 
 def test_watch_is_reachable_from_the_terminal_engine(make_bridge):

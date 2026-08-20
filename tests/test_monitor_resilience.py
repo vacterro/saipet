@@ -214,4 +214,4 @@ def test_a_throwing_sink_cannot_kill_the_loop(tmp_path):
     )
 
     assert state.cycles == 2
-    assert state.notified == 1  # counted as found even though delivery failed
+    assert state.notified_total == 1  # counted as found even though delivery failed
