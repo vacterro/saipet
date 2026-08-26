@@ -13,6 +13,6 @@ execution_intent: goal
 goal_waves: 0
 goal_tickets: 3
 transition_from: SHIP
-last_event: 252
-updated: 2026-08-26T03:49:00Z
+last_event: 254
+updated: 2026-08-26T03:53:00Z
 ---
