@@ -1,6 +1,6 @@
 # SAIPET
 
-v0.21.0 -- see [CHANGELOG.md](CHANGELOG.md)
+v0.28.0 -- see [CHANGELOG.md](CHANGELOG.md)
 
 Read-only internet scout. Finds threads where people describe a real
 problem (symptom search, not brand search), scores relevance, drafts a
@@ -124,3 +124,48 @@ is dropped before scoring. Unknown keys are refused, not ignored.
 ```
 pytest
 ```
+
+## Desktop GUI
+
+A local, read-only desktop app over the same bridge:
+
+```
+python -m saipet.gui
+```
+
+Windows launcher (creates/uses a `.venv`, runs from the project root so
+state files land consistently):
+
+```
+saipet            # GUI
+saipet cli        # one-shot scout
+saipet monitor    # unattended monitor daemon
+saipet bridge     # line-oriented command engine
+```
+
+- Local only: it runs on your machine and talks to nothing but the scout's
+  normal read-only sources.
+- Scouting is read-only: the scout fetches, scores and gates; it never
+  writes to Reddit.
+- Approval generates text only: `Approve & build draft` returns a draft for
+  you to paste yourself. There is no post button and no auto-post path.
+- The GUI drives `Bridge.dispatch()` through the same closed verb set as the
+  terminal engine; it reimplements no scout logic.
+
+Screens: `Scout` (start an explicit run), `Queue` (review findings and build
+drafts), `Monitor` (one bounded cycle, no fake daemon status), `Reports`
+(plain-text preview), `Settings` (validated, atomic config save).
+
+The review queue is durable: `review-state.json` keeps pending/approved/
+rejected findings across restarts, and a scout writes the queue before it
+marks anything seen, so a crash can never permanently lose a pending
+opportunity. Config, seen-state and review-state all use the same atomic JSON
+writer.
+
+The GUI uses the Golden Default palette, Verdana-only typography, and the
+2px bevel depth language from `saipen/UI.md`. Palette, fonts and bevel are
+pinned by `tests/test_gui_theme.py`; import-time behaviour is pinned by
+`tests/test_gui_startup.py`. Non-antialiased glyph rendering is not
+guaranteed by Tk/Windows (GDI/ClearType); font family and pixel sizes are
+set deterministically and the limitation is platform-level, not a code
+shortcut.

@@ -13,11 +13,20 @@ afterwards -- a silent half-applied config, which is worse than none.
 """
 
 import json
+import os
+import tempfile
 from pathlib import Path
 
 from saipet import config
 
 DEFAULT_CONFIG_PATH = "saipet.config.json"
+
+# CORE-005: an immutable copy of the shipped weights, captured at import time
+# BEFORE any runtime override mutates `config.WEIGHTS`. Weight-sign validation
+# must anchor to this canonical contract, never to the live (mutable) container:
+# otherwise a GUI that saves a penalty as 0 could later convert it into a
+# reward, because validation would then begin from the in-memory 0.
+_SHIPPED_WEIGHTS = {name: float(value) for name, value in config.WEIGHTS.items()}
 
 # key in the JSON file -> the config.py name it overrides.
 _OVERRIDABLE = {
@@ -28,6 +37,8 @@ _OVERRIDABLE = {
     "gate_prioritize_at": "GATE_PRIORITIZE_AT",
     "max_age_hours": "MAX_AGE_HOURS",
     "notify_min_score": "NOTIFY_MIN_SCORE",
+    "report_retention_days": "REPORT_RETENTION_DAYS",
+    "seen_ttl_days": "SEEN_TTL_DAYS",
 }
 
 
@@ -40,12 +51,23 @@ class ConfigError(ValueError):
 
 
 def load_overrides(path: str | Path = DEFAULT_CONFIG_PATH) -> dict:
-    """Read the override file. A missing file is normal and yields `{}`."""
+    """Read the override file. A missing file is normal and yields `{}`.
+
+    W2-005: a file that IS present but cannot be decoded (invalid UTF-8) or
+    read (permission/I/O error) is a configuration error, not a "use
+    defaults" signal. Every such failure is normalised to `ConfigError` so
+    CLI/monitor/terminal all take their advertised configuration-error exit
+    path instead of propagating a raw implementation traceback.
+    """
     config_path = Path(path)
     if not config_path.exists():
         return {}
     try:
-        data = json.loads(config_path.read_text(encoding="utf-8"))
+        text = config_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ConfigError(f"{config_path}: cannot read config -- {exc}") from exc
+    try:
+        data = json.loads(text)
     except json.JSONDecodeError as exc:
         raise ConfigError(f"{config_path}: not valid JSON -- {exc}") from exc
     if not isinstance(data, dict):
@@ -58,36 +80,61 @@ def _require(condition: bool, message: str) -> None:
         raise ConfigError(message)
 
 
-def apply_overrides(overrides: dict) -> list[str]:
-    """Apply `overrides` to config.py's tunables. Returns the keys applied.
+def validate_overrides(overrides: dict) -> dict:
+    """Validate `overrides` and return the canonicalised form.
 
-    Every key is validated before anything is written, so a file with one
-    bad entry leaves the defaults completely untouched instead of a
-    half-applied mixture.
+    `apply_overrides` runs this first, so a file with one bad entry leaves
+    the defaults completely untouched. Split out so a GUI can validate the
+    form it is about to write without mutating the running config.
+
+    Scoring semantics are enforced at the boundary (W2-009): symptoms are
+    trimmed, must be non-empty and lowercase (candidate text is matched
+    lowercased), and must be unique after normalisation -- one repeated
+    symptom must never count as several distinct matches. Numeric weights
+    must be finite.
     """
-    for key in overrides:
+    import math
+
+    canonical = dict(overrides)
+
+    for key in canonical:
         _require(
             key in _OVERRIDABLE,
             f"unknown config key {key!r} -- known keys: {', '.join(sorted(_OVERRIDABLE))}",
         )
 
-    if "symptoms" in overrides:
-        value = overrides["symptoms"]
+    if "symptoms" in canonical:
+        value = canonical["symptoms"]
         _require(
             isinstance(value, list) and all(isinstance(s, str) for s in value),
             "symptoms must be a list of strings",
         )
         _require(bool(value), "symptoms must not be empty -- an empty vocabulary matches nothing")
+        normalized = [s.strip() for s in value]
+        _require(
+            all(normalized),
+            "symptoms must be non-empty strings (no whitespace-only entries)",
+        )
+        _require(
+            all(s == s.lower() for s in normalized),
+            "symptoms must be lowercase -- candidate text is matched lowercased",
+        )
+        _require(
+            len(set(normalized)) == len(normalized),
+            "symptoms must be unique after normalisation",
+        )
+        canonical["symptoms"] = normalized
 
-    if "subreddit_allowlist" in overrides:
-        value = overrides["subreddit_allowlist"]
+    if "subreddit_allowlist" in canonical:
+        value = canonical["subreddit_allowlist"]
         _require(
             isinstance(value, list) and all(isinstance(s, str) for s in value),
             "subreddit_allowlist must be a list of strings",
         )
+        canonical["subreddit_allowlist"] = [s.strip() for s in value if s.strip()]
 
-    if "weights" in overrides:
-        value = overrides["weights"]
+    if "weights" in canonical:
+        value = canonical["weights"]
         _require(isinstance(value, dict), "weights must be an object")
         for name, weight in value.items():
             _require(
@@ -98,45 +145,138 @@ def apply_overrides(overrides: dict) -> list[str]:
                 isinstance(weight, (int, float)) and not isinstance(weight, bool),
                 f"weight {name!r} must be a number",
             )
-
-    for key in ("gate_ignore_below", "gate_prioritize_at", "max_age_hours", "notify_min_score"):
-        if key in overrides:
             _require(
-                isinstance(overrides[key], (int, float)) and not isinstance(overrides[key], bool),
-                f"{key} must be a number",
+                math.isfinite(float(weight)),
+                f"weight {name!r} must be finite",
+            )
+            # CORE-005: the shipped sign encodes the scorer's contract --
+            # penalties subtract, evidence boosts add. A sign-flipped
+            # override turns "already solved" into a reward. Anchor the
+            # check to the immutable shipped baseline, not the mutable
+            # live `config.WEIGHTS`, so a 0-saved penalty cannot later
+            # become a reward.
+            default = _SHIPPED_WEIGHTS[name]
+            flipped = (default < 0 and float(weight) > 0) or (
+                default > 0 and float(weight) < 0
+            )
+            _require(
+                not flipped,
+                f"weight {name!r} must keep its "
+                f"{'penalty' if default < 0 else 'boost'} sign "
+                f"(shipped {config.WEIGHTS[name]}, got {weight})",
             )
 
-    if "max_age_hours" in overrides:
-        _require(overrides["max_age_hours"] >= 0, "max_age_hours must not be negative")
+    for key in ("gate_ignore_below", "gate_prioritize_at", "max_age_hours", "notify_min_score",
+                "report_retention_days", "seen_ttl_days"):
+        if key in canonical:
+            _require(
+                isinstance(canonical[key], (int, float)) and not isinstance(canonical[key], bool),
+                f"{key} must be a number",
+            )
+            _require(
+                math.isfinite(float(canonical[key])),
+                f"{key} must be finite",
+            )
 
-    if "notify_min_score" in overrides:
+    # CORE-011: both gates decide bands over the scorer's fixed 0..100
+    # output domain; thresholds outside it produce valid-looking but
+    # contradictory classification (score 0 as priority, or unreachable
+    # priority bands).
+    for key in ("gate_ignore_below", "gate_prioritize_at"):
+        if key in canonical:
+            _require(
+                0 <= float(canonical[key]) <= 100,
+                f"{key} must be within the scorer's 0..100 score domain",
+            )
+
+    if "report_retention_days" in canonical:
+        _require(canonical["report_retention_days"] > 0, "report_retention_days must be positive")
+
+    if "seen_ttl_days" in canonical:
+        _require(canonical["seen_ttl_days"] > 0, "seen_ttl_days must be positive")
+
+    if "max_age_hours" in canonical:
+        _require(canonical["max_age_hours"] >= 0, "max_age_hours must not be negative")
+
+    if "notify_min_score" in canonical:
         _require(
-            0 <= overrides["notify_min_score"] <= 100,
+            0 <= canonical["notify_min_score"] <= 100,
             "notify_min_score must be between 0 and 100",
         )
 
-    ignore_below = overrides.get("gate_ignore_below", config.GATE_IGNORE_BELOW)
-    prioritize_at = overrides.get("gate_prioritize_at", config.GATE_PRIORITIZE_AT)
+    ignore_below = canonical.get("gate_ignore_below", config.GATE_IGNORE_BELOW)
+    prioritize_at = canonical.get("gate_prioritize_at", config.GATE_PRIORITIZE_AT)
     _require(
         ignore_below <= prioritize_at,
         f"gate_ignore_below ({ignore_below}) must not exceed gate_prioritize_at ({prioritize_at})",
     )
 
-    # Validation is complete: from here nothing can fail partway through.
-    if "symptoms" in overrides:
-        config.SYMPTOMS[:] = overrides["symptoms"]
-    if "subreddit_allowlist" in overrides:
-        config.SUBREDDIT_ALLOWLIST.clear()
-        config.SUBREDDIT_ALLOWLIST.update(overrides["subreddit_allowlist"])
-    if "weights" in overrides:
-        config.WEIGHTS.update(overrides["weights"])
-    if "gate_ignore_below" in overrides:
-        config.GATE_IGNORE_BELOW = overrides["gate_ignore_below"]
-    if "gate_prioritize_at" in overrides:
-        config.GATE_PRIORITIZE_AT = overrides["gate_prioritize_at"]
-    if "max_age_hours" in overrides:
-        config.MAX_AGE_HOURS = overrides["max_age_hours"]
-    if "notify_min_score" in overrides:
-        config.NOTIFY_MIN_SCORE = overrides["notify_min_score"]
+    return canonical
 
-    return sorted(overrides)
+
+def apply_overrides(overrides: dict) -> list[str]:
+    """Apply `overrides` to config.py's tunables. Returns the keys applied.
+
+    Every key is validated before anything is written, so a file with one
+    bad entry leaves the defaults completely untouched instead of a
+    half-applied mixture. The canonicalised form is what gets applied.
+    """
+    canonical = validate_overrides(overrides)
+
+    # Validation is complete: from here nothing can fail partway through.
+    if "symptoms" in canonical:
+        config.SYMPTOMS[:] = canonical["symptoms"]
+    if "subreddit_allowlist" in canonical:
+        config.SUBREDDIT_ALLOWLIST.clear()
+        config.SUBREDDIT_ALLOWLIST.update(canonical["subreddit_allowlist"])
+    if "weights" in canonical:
+        config.WEIGHTS.update(canonical["weights"])
+    if "gate_ignore_below" in canonical:
+        config.GATE_IGNORE_BELOW = canonical["gate_ignore_below"]
+    if "gate_prioritize_at" in canonical:
+        config.GATE_PRIORITIZE_AT = canonical["gate_prioritize_at"]
+    if "max_age_hours" in canonical:
+        config.MAX_AGE_HOURS = canonical["max_age_hours"]
+    if "notify_min_score" in canonical:
+        config.NOTIFY_MIN_SCORE = canonical["notify_min_score"]
+    if "report_retention_days" in canonical:
+        config.REPORT_RETENTION_DAYS = canonical["report_retention_days"]
+    if "seen_ttl_days" in canonical:
+        config.SEEN_TTL_DAYS = canonical["seen_ttl_days"]
+
+    return sorted(canonical)
+
+
+def write_overrides(overrides: dict, path: str | Path = DEFAULT_CONFIG_PATH) -> Path:
+    """Validate, canonicalise, then atomically persist `overrides` as a
+    config file.
+
+    A settings editor never half-writes: the JSON goes to a temp file in the
+    same directory, is flushed and fsynced, then `os.replace`d over the
+    target. A crash mid-write leaves either the old file or the new one,
+    never a truncated mix. Unknown keys are refused before anything is
+    written, exactly as `apply_overrides` refuses them before applying.
+    The canonicalised form is what gets persisted.
+    """
+    canonical = validate_overrides(overrides)
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(target.parent), prefix=f".{target.name}.", suffix=".tmp"
+    )
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(canonical, handle, ensure_ascii=False, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, target)
+    except BaseException:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+        raise
+    return target

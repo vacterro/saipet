@@ -16,64 +16,41 @@ precisely the path tests/test_no_autopost.py exists to keep out of this
 package. A webhook sink is a reasonable thing to want, but it is an
 outbound network write and belongs to a ticket where the user names the
 endpoint, not to a default.
+
+Every `send()` returns a `Delivery` so the caller can count only
+successful deliveries and surface sink failures (CORE-007).
 """
 
+import hashlib
 import json
-import re
 import time
+from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urlparse
+
+import sqlite3
 
 DEFAULT_NOTIFICATION_FILE = "notifications.jsonl"
 DEFAULT_INBOX_FILE = "inbox.md"
 
-# Unicode categories for control characters we want to drop: Cc (control),
-# Cf (format), Cs (surrogate), Co (private use), Cn (unassigned).
-_CONTROL_RE = re.compile(r"[\x00-\x0d\x0e-\x1f\x7f\uFFF0-\uFFFF]")
-# ANSI escape sequences: ESC[ ... any printable bytes ... m, x, K, etc.
-_ANSI_RE = re.compile(r"\x1b\[[\d;]*[A-Za-z]")
+# W2-007: one shared implementation of the text-hygiene rules (textutil).
+# The underscore-prefixed names below are kept as aliases because tests and
+# sibling modules import them from here.
+from saipet.textutil import markdown_escape as _escape_markdown  # noqa: E402
+from saipet.textutil import safe_link_destination as _validate_permalink  # noqa: E402
+from saipet.textutil import strip_untrusted as _strip_untrusted  # noqa: E402
 
 
-def _strip_untrusted(text: str) -> str:
-    """Strip characters that break structured text output.
+@dataclass(frozen=True)
+class Delivery:
+    """The outcome of one notification delivery to one or more sinks.
 
-    Console sinks treat each notification as one line. A title carrying a
-    literal newline, tab, carriage return, or ANSI escape sequence would
-    forge extra output the driver has to parse around. Drop the noise
-    before it reaches the line boundary.
+    `delivered` is True only when no sink failed. A partial multi-sink
+    failure (some sinks succeeded, some failed) is reported as not delivered
+    and the caller decides how to count it.
     """
-    text = _ANSI_RE.sub("", text)
-    text = _CONTROL_RE.sub(" ", text)
-    return text.strip()
-
-
-def _escape_markdown(text: str) -> str:
-    """Escape markdown metacharacters so rendered inbox stays literal.
-
-    The inbox is human-readable markdown; a Reddit title containing `*`,
-    `_`, `[`, `]`, or `` ` `` would shift formatting. Escape them so the
-    inbox displays exactly what the title says.
-    """
-    for ch in r"\*`_[]()>#-+.!|":
-        text = text.replace(ch, "\\" + ch)
-    return text
-
-
-def _validate_permalink(url: str | None) -> str | None:
-    """Return the URL only when it looks like a real https link.
-
-    Permalinks come off the public internet. A malformed or non-https URL
-    turned into an `<href>` is a trust boundary violation.
-    """
-    if not url or not isinstance(url, str):
-        return None
-    parsed = urlparse(url)
-    if parsed.scheme not in ("https",):
-        return None
-    if not parsed.netloc:
-        return None
-    return url
+    delivered: bool
+    failures: tuple = ()  # (sink_name, reason) pairs
 
 
 @dataclass(frozen=True)
@@ -90,7 +67,6 @@ class Notification:
 
 
 def finding(item_view: dict, now: float) -> Notification:
-    """Build the notification for one queued item (bridge `queue` shape)."""
     return Notification(
         kind="finding",
         text=(
@@ -103,8 +79,6 @@ def finding(item_view: dict, now: float) -> Notification:
 
 
 def heartbeat(cycle: int, queued: int, now: float) -> Notification:
-    """Proof of life. 'Alive and found nothing' and 'died at 03:00' produce
-    identical silence otherwise, and only one of them is fine."""
     return Notification(
         kind="heartbeat",
         text=f"cycle {cycle}: {queued} new candidate(s)",
@@ -114,12 +88,6 @@ def heartbeat(cycle: int, queued: int, now: float) -> Notification:
 
 
 def degraded(detail: str, cycle: int, now: float) -> Notification:
-    """Some targets were unreadable, not all of them.
-
-    Worth saying out loud -- a subreddit that has been 403ing for a week is
-    a finding of its own -- but not worth slowing the whole monitor down
-    for, which is what makes it a different kind from `error`.
-    """
     return Notification(
         kind="warning",
         text=f"cycle {cycle} degraded: {detail}",
@@ -138,18 +106,18 @@ def error(message: str, cycle: int, now: float) -> Notification:
 
 
 class Notifier:
-    """Sink interface. `send` must not raise: a delivery failure has to
-    degrade the monitor, never stop it."""
+    """Sink interface. `send` returns a `Delivery` summarising downstream
+    success. Raise to signal a hard failure; the caller may still catch it."""
 
-    def send(self, notification: Notification) -> None:
+    def send(self, notification: Notification) -> Delivery:
         raise NotImplementedError
 
 
 class NullNotifier(Notifier):
     """Drops everything. For tests and for a run the caller drives itself."""
 
-    def send(self, notification: Notification) -> None:
-        return
+    def send(self, notification: Notification) -> Delivery:
+        return Delivery(delivered=True)
 
 
 class ConsoleNotifier(Notifier):
@@ -159,14 +127,26 @@ class ConsoleNotifier(Notifier):
         self._print = print_fn
         self._prefix = prefix
 
-    def send(self, notification: Notification) -> None:
+    def send(self, notification: Notification) -> Delivery:
         stamp = time.strftime("%Y-%m-%d %H:%M:%SZ", time.gmtime(notification.at))
         line = f"{self._prefix} {stamp} {notification.kind}: {_strip_untrusted(notification.text)}"
-        self._print(line)
+        try:
+            self._print(line)
+            return Delivery(delivered=True)
+        except Exception as exc:
+            return Delivery(delivered=False, failures=(("ConsoleNotifier", str(exc)),))
 
 
 class FileNotifier(Notifier):
-    """Appends to a JSONL feed and a human-readable inbox."""
+    """Appends to a JSONL feed and a human-readable inbox.
+
+    W2-003: the two appends are independent writes, so they are tracked
+    independently. A stable per-notification identity plus a tiny
+    completion-state sidecar (`<feed>.delivery.json`) means a failure of the
+    SECOND destination no longer masquerades as total failure after the
+    first one durably landed -- and a retry re-sends only to the
+    destination that actually missed it, never duplicating the other.
+    """
 
     def __init__(
         self,
@@ -177,21 +157,97 @@ class FileNotifier(Notifier):
         self.inbox_path = (
             Path(inbox_path) if inbox_path is not None else self.path.with_name(DEFAULT_INBOX_FILE)
         )
+        # PERF-002: completion state is a point-addressable SQLite store keyed
+        # by notification identity, so membership and per-destination completion
+        # are O(1) point lookups/updates that never load or rewrite all
+        # historical identities. The connection is created lazily and no
+        # historical state is materialised into resident Python on startup.
+        self._state_path = self.path.with_name(self.path.stem + ".delivery.sqlite")
+        self._db = None
 
-    def send(self, notification: Notification) -> None:
-        for target in (self.path, self.inbox_path):
-            target.parent.mkdir(parents=True, exist_ok=True)
+    def _db_conn(self):
+        if self._db is None:
+            self._state_path.parent.mkdir(parents=True, exist_ok=True)
+            self._db = sqlite3.connect(str(self._state_path), timeout=10)
+            self._db.execute("PRAGMA journal_mode=WAL")
+            self._db.execute(
+                "CREATE TABLE IF NOT EXISTS delivery ("
+                "  identity TEXT PRIMARY KEY,"
+                "  jsonl_done INTEGER NOT NULL DEFAULT 0,"
+                "  inbox_done INTEGER NOT NULL DEFAULT 0"
+                ")"
+            )
+            self._db.commit()
+        return self._db
 
-        with self.path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(notification.as_dict(), ensure_ascii=False) + "\n")
+    @staticmethod
+    def _identity(notification: Notification) -> str:
+        # W2-008: the key must be stable across retries. The retry wall clock
+        # (`at`) is deliberately excluded -- the monitor already reconstructs
+        # each obligation with its original `notification_at`, so `at` is the
+        # same on every retry; excluding it keeps a stray caller that passes a
+        # fresh `now` from forking the identity and duplicating a delivered sink.
+        # The canonical finding identity rides in `data`.
+        payload = (
+            f"{notification.kind}|{notification.text}|"
+            f"{notification.data.get('permalink', '')}|"
+            f"{notification.data.get('source', '')}|{notification.data.get('id', '')}"
+        )
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:24]
 
-        stamp = time.strftime("%Y-%m-%d %H:%M:%SZ", time.gmtime(notification.at))
-        line = f"- `{stamp}` **{_escape_markdown(notification.kind)}** -- {_escape_markdown(notification.text)}"
-        permalink = _validate_permalink(notification.data.get("permalink"))
-        if permalink:
-            line += f" <{permalink}>"
-        with self.inbox_path.open("a", encoding="utf-8") as handle:
-            handle.write(line + "\n")
+    def _is_done(self, identity: str, column: str) -> bool:
+        row = self._db_conn().execute(
+            f"SELECT {column} FROM delivery WHERE identity=?", (identity,)
+        ).fetchone()
+        return bool(row and row[0])
+
+    def _mark_done(self, identity: str, column: str) -> None:
+        db = self._db_conn()
+        db.execute(
+            "INSERT INTO delivery (identity, jsonl_done, inbox_done) VALUES (?, ?, ?) "
+            "ON CONFLICT(identity) DO UPDATE SET "
+            "jsonl_done = jsonl_done OR excluded.jsonl_done, "
+            "inbox_done = inbox_done OR excluded.inbox_done",
+            (
+                identity,
+                1 if column == "jsonl" else 0,
+                1 if column == "inbox" else 0,
+            ),
+        )
+        db.commit()
+
+    def send(self, notification: Notification) -> Delivery:
+        identity = self._identity(notification)
+        failures: list[tuple[str, str]] = []
+
+        if not self._is_done(identity, "jsonl_done"):
+            try:
+                self.path.parent.mkdir(parents=True, exist_ok=True)
+                with self.path.open("a", encoding="utf-8") as handle:
+                    handle.write(
+                        json.dumps(notification.as_dict(), ensure_ascii=False) + "\n"
+                    )
+                self._mark_done(identity, "jsonl")
+            except Exception as exc:
+                failures.append((f"{type(self).__name__}.jsonl", str(exc)))
+
+        if not self._is_done(identity, "inbox_done"):
+            try:
+                self.inbox_path.parent.mkdir(parents=True, exist_ok=True)
+                stamp = time.strftime("%Y-%m-%d %H:%M:%SZ", time.gmtime(notification.at))
+                line = f"- `{stamp}` **{_escape_markdown(notification.kind)}** -- {_escape_markdown(notification.text)}"
+                permalink = _validate_permalink(notification.data.get("permalink"))
+                if permalink:
+                    line += f" <{permalink}>"
+                with self.inbox_path.open("a", encoding="utf-8") as handle:
+                    handle.write(line + "\n")
+                self._mark_done(identity, "inbox")
+            except Exception as exc:
+                failures.append((f"{type(self).__name__}.inbox", str(exc)))
+
+        if failures:
+            return Delivery(delivered=False, failures=tuple(failures))
+        return Delivery(delivered=True)
 
 
 class MultiNotifier(Notifier):
@@ -199,16 +255,34 @@ class MultiNotifier(Notifier):
 
     One dead sink must not cost the others their message, so a failing
     `send` is collected and reported rather than raised -- the monitor's
-    job is to keep running.
+    job is to keep running. Diagnostics are bounded (PERF-003): only the
+    most recent failures are kept, and a lifetime failure counter tracks
+    the total.
     """
 
-    def __init__(self, *sinks: Notifier):
+    def __init__(self, *sinks: Notifier, max_recorded_failures: int = 20):
         self.sinks = list(sinks)
-        self.failures: list[str] = []
+        self.failure_total = 0
+        self._latest_failures: deque[tuple[str, str]] = deque(maxlen=max_recorded_failures)
 
-    def send(self, notification: Notification) -> None:
+    @property
+    def latest_failures(self) -> list[tuple[str, str]]:
+        return list(self._latest_failures)
+
+    @property
+    def failures(self) -> list[str]:
+        return [f"{name}: {reason}" for name, reason in self._latest_failures]
+
+    def send(self, notification: Notification) -> Delivery:
+        collected: list[tuple[str, str]] = []
         for sink in self.sinks:
             try:
-                sink.send(notification)
+                result = sink.send(notification)
+                if not result.delivered:
+                    collected.extend(result.failures)
             except Exception as exc:  # noqa: BLE001 -- a sink may fail any way it likes
-                self.failures.append(f"{type(sink).__name__}: {type(exc).__name__}: {exc}")
+                collected.append((type(sink).__name__, f"{type(exc).__name__}: {exc}"))
+        if collected:
+            self.failure_total += len(collected)
+            self._latest_failures.extend(collected)
+        return Delivery(delivered=not collected, failures=tuple(collected))

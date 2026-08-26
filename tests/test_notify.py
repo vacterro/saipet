@@ -120,3 +120,105 @@ def test_one_dead_sink_does_not_cost_the_others_their_message(tmp_path):
 
 def test_the_null_sink_drops_everything_without_complaining():
     NullNotifier().send(finding(_ITEM, NOW))
+
+
+# W2-003: independent per-destination delivery ----------------------------------
+
+
+def test_an_inbox_failure_after_a_successful_jsonl_append_is_partial(tmp_path):
+    """W2-003: the inbox write failed AFTER the JSONL append had landed, but
+    send() reported total failure -- and a naive retry duplicated the JSONL
+    record. JSONL success is now retained and attributed separately."""
+    import json as _json
+
+    feed = tmp_path / "notifications.jsonl"
+    bad_inbox = tmp_path / "inbox-is-a-directory"  # exists -> open() fails
+    bad_inbox.mkdir()
+    notifier = FileNotifier(feed, inbox_path=bad_inbox)
+
+    first = notifier.send(finding(_ITEM, NOW))
+
+    assert first.delivered is False
+    assert any(name.endswith(".inbox") for name, _r in first.failures)
+    # The durable feed holds exactly one record despite the failure...
+    lines = feed.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1
+    assert _json.loads(lines[0])["data"]["id"] == "t1"
+
+    # ...and the retry writes ONLY the missing destination.
+    good = FileNotifier(feed, inbox_path=tmp_path / "inbox.md")
+    second = good.send(finding(_ITEM, NOW))
+    assert second.delivered is True
+    assert len(feed.read_text(encoding="utf-8").splitlines()) == 1  # no duplicate
+    assert len((tmp_path / "inbox.md").read_text(encoding="utf-8").splitlines()) == 1
+
+
+def test_resending_the_same_notification_does_not_duplicate_either_file(tmp_path):
+    from saipet.notify import FileNotifier as _F
+
+    notifier = _F(tmp_path / "n.jsonl")
+    assert notifier.send(finding(_ITEM, NOW)).delivered
+    assert notifier.send(finding(_ITEM, NOW)).delivered  # identical identity
+
+    assert len(notifier.path.read_text(encoding="utf-8").splitlines()) == 1
+    assert len(notifier.inbox_path.read_text(encoding="utf-8").splitlines()) == 1
+
+
+def test_a_jsonl_only_failure_reports_the_feed_not_the_inbox(tmp_path):
+    feed_dir = tmp_path / "feed-is-a-directory"
+    feed_dir.mkdir()  # open-for-append on a directory fails
+    notifier = FileNotifier(feed_dir, inbox_path=tmp_path / "inbox.md")
+
+    result = notifier.send(finding(_ITEM, NOW))
+
+    assert result.delivered is False
+    assert any(name.endswith(".jsonl") for name, _r in result.failures)
+
+
+# PERF-002: point-addressable completion store under a large backlog --------
+
+
+def test_completion_store_is_point_addressable_under_large_backlog(tmp_path):
+    """PERF-002: a long-lived monitor accumulates many completed identities.
+    The completion store must be point-addressable: a novel send is a single
+    point lookup/update, not a full-state read/rewrite proportional to H."""
+    import sqlite3
+
+    feed = tmp_path / "n.jsonl"
+    notifier = FileNotifier(feed)
+    # Simulate 50k prior completed notifications directly in the store.
+    db = notifier._db_conn()
+    db.executemany(
+        "INSERT OR IGNORE INTO delivery (identity, jsonl_done, inbox_done) "
+        "VALUES (?, 1, 1)",
+        [(f"prior-{i:06d}",) for i in range(50_000)],
+    )
+    db.commit()
+
+    # A novel notification: one point add, no full-state rewrite.
+    novel = finding({"id": "brand-new", "subreddit": "x", "title": "t", "permalink": "https://r/x/bn"}, NOW)
+    assert notifier.send(novel).delivered
+    assert len(feed.read_text(encoding="utf-8").splitlines()) == 1
+    assert len(notifier.inbox_path.read_text(encoding="utf-8").splitlines()) == 1
+
+    # Resend the same novel notification -> still exactly one line each.
+    assert notifier.send(novel).delivered
+    assert len(feed.read_text(encoding="utf-8").splitlines()) == 1
+    assert len(notifier.inbox_path.read_text(encoding="utf-8").splitlines()) == 1
+
+    # The store holds the prior backlog plus the novel identity, untouched.
+    total = db.execute("SELECT COUNT(*) FROM delivery").fetchone()[0]
+    assert total == 50_001
+
+
+def test_completion_store_survives_a_fresh_process(tmp_path):
+    """PERF-002: the SQLite completion store is durable across a new
+    FileNotifier instance (simulating a monitor restart)."""
+    feed = tmp_path / "n.jsonl"
+    FileNotifier(feed).send(finding(_ITEM, NOW))
+
+    # A brand-new instance must see the prior completion and not duplicate.
+    again = FileNotifier(feed)
+    assert again.send(finding(_ITEM, NOW)).delivered
+    assert len(feed.read_text(encoding="utf-8").splitlines()) == 1
+    assert len(again.inbox_path.read_text(encoding="utf-8").splitlines()) == 1

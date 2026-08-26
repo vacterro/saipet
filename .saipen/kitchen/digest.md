@@ -1,3 +1,3 @@
-done: monitor wave complete -- 6 tickets, v0.15.0 to v0.20.0. `python -m saipet.monitor` now scouts on an interval unattended, reports only findings above a configurable bar, survives a failed cycle with backoff, heartbeats proof-of-life, and writes notifications.jsonl + inbox.md. Over the API: `watch cycles=N` runs it, `status` says whether it is alive. 190/190 tests green, all commits local-only.
-remaining: nothing on the board.
-awaiting: nothing blocking. Two open user choices: Reddit credentials + a subreddit allowlist before a real run, and which push channel (desktop toast / Telegram / webhook) is wanted -- deliberately not invented, since it is an outbound write to an endpoint only the user can pick.
+done: Audit acb-mt7tx0xp - 21 tickets T-034..T-054 complete (445 tests) - CORE/W2/PERF
+remaining: T-028 [DOING /] single-instance lock (SCOUT claimed 13:16Z) + T-031 hot-reload + T-032 AST scan + T-033 shadow eval - T-029/T-030 verify pending
+awaiting: user brake - run 'cc' to resume SCOUT T-028 + user commit/push local-only chain

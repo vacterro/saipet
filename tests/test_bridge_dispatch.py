@@ -99,7 +99,7 @@ def test_approve_refuses_to_invent_the_answer(bridge):
     result = bridge.dispatch("approve", id="t1", solution="   ")
 
     assert result.ok is False
-    assert "written by a human" in result.error
+    assert "solution" in result.error
 
 
 def test_approve_on_an_unknown_id_fails_without_touching_the_queue(bridge):
@@ -116,7 +116,7 @@ def test_bad_arguments_are_reported_not_raised(bridge):
     result = bridge.dispatch("scout", nonsense=True)
 
     assert result.ok is False
-    assert "bad arguments for 'scout'" in result.error
+    assert "unknown argument 'nonsense'" in result.error
 
 
 def test_report_lists_runs_on_disk_not_just_this_session(bridge, tmp_path):

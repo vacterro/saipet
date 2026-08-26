@@ -30,8 +30,19 @@ import json
 import shlex
 
 from saipet.bridge.dispatch import VERBS, Bridge
+from saipet.runtime_config import (
+    DEFAULT_CONFIG_PATH,
+    ConfigError,
+    apply_overrides,
+    load_overrides,
+)
 
 META_VERBS = frozenset({"help", "quit"})
+
+# W2-001: the canonical durable review store the default terminal engine uses,
+# so a finding survives a process restart (the user-facing terminal is the
+# agent control plane, not an ephemeral session).
+DEFAULT_REVIEW_PATH = "review-state.json"
 
 # Arguments that are lists of strings when written comma-separated.
 _LIST_ARGS = frozenset({"subreddit", "subreddits"})
@@ -127,7 +138,12 @@ def handle_line(bridge: Bridge, line: str) -> dict:
     return response
 
 
-def run_terminal(bridge: Bridge | None = None, read_fn=input, write_fn=print) -> None:
+def run_terminal(
+    bridge: Bridge | None = None,
+    read_fn=input,
+    write_fn=print,
+    config_path: str | None = None,
+) -> None:
     """Read lines until `quit` or end of input, writing one JSON line each.
 
     No prompt is printed. The caller here is normally another program, and
@@ -135,8 +151,24 @@ def run_terminal(bridge: Bridge | None = None, read_fn=input, write_fn=print) ->
     parse. `read_fn`/`write_fn` are injectable for the same reason the
     interactive review loop's are: a protocol that can only be tested by
     faking stdin ends up untested.
+
+    CORE-004: when no engine is injected, the default terminal applies the
+    project's persisted runtime config (saipet.config.json) BEFORE building
+    the bridge, so the agent control plane honors the same allowlist, gates,
+    weights and TTL as CLI/monitor/GUI. An invalid config is a clear startup
+    failure, not a silent fall-back to defaults. W2-001: the default engine
+    also uses the durable review store (review-state.json) so a finding
+    survives a restart; a corrupt store fails explicitly rather than falling
+    back to an empty queue.
     """
-    engine = bridge if bridge is not None else Bridge()
+    if bridge is None:
+        try:
+            apply_overrides(load_overrides(config_path or DEFAULT_CONFIG_PATH))
+        except ConfigError:
+            raise
+        engine = Bridge(review_path=DEFAULT_REVIEW_PATH)
+    else:
+        engine = bridge
     while True:
         try:
             line = read_fn()

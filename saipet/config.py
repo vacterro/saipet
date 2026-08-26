@@ -45,6 +45,16 @@ MAX_AGE_HOURS = 168
 # teaches its owner to ignore it, which is the same as not running it.
 NOTIFY_MIN_SCORE = GATE_PRIORITIZE_AT
 
+# Report retention (T-025): report pairs older than this many days are pruned
+# by the unattended monitor so a long-lived daemon does not accumulate ~192
+# files per day forever.
+REPORT_RETENTION_DAYS = 14
+
+# Seen-state TTL (T-027): a candidate stays deduplicated for this long, then
+# becomes reconsiderable. Prevents the seen store from growing without bound
+# on a daemon meant to run for months.
+SEEN_TTL_DAYS = 90
+
 # Cue words for the three secondary fit signals (T-002). Keyword-based on
 # purpose: cheap, explainable, and replaceable by a real classifier later
 # without changing scorer.py's contract.

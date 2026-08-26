@@ -45,6 +45,7 @@ def scout(
     source: Source,
     signal_fn,
     seen: SeenStore | None = None,
+    persist=None,
     limit: int = DEFAULT_LIMIT,
     max_age_hours: float | None = None,
     now_fn=time.time,
@@ -53,20 +54,38 @@ def scout(
     candidate; scoring itself stays a pure function (scorer.py) so it's
     testable without a source at all.
 
-    `seen`, if given, is checked/marked for every fetched candidate --
-    regardless of gate band -- so a second run never re-surfaces (or lets a
-    human re-approve into) the same thread.
+    `seen`, if given, is checked for every candidate and durably marked for
+    every one admitted to the queue -- and only those. Gate-dropped
+    candidates stay reconsiderable, so changing the freshness window, the
+    allowlist or the score thresholds can reconsider them (CORE-005).
+
+    Durability ordering: `persist(queue, source)`, when supplied, runs BEFORE
+    any seen mark, so a crash between "write the durable record" and "mark
+    seen" never loses a finding (W2-001). The seen batch is one atomic write
+    (PERF-001) that publishes to memory only after the disk write succeeds.
+
+    The same `(source, id)` returned twice by one fetch is deduplicated
+    within the run, so duplicates never enter the queue, the report or the
+    monitor feed (W2-006).
 
     `max_age_hours` drops threads too old to be worth answering; `now_fn` is
     injectable so the window is testable without freezing the clock.
     """
     queue = ReviewQueue()
     now = now_fn()
+    seen_this_run: set[tuple[str, str]] = set()
+    admitted: list[tuple[str, str]] = []
+    claimed: list[tuple[str, str]] = []
+    # CORE-006: a store with `claim` admits atomically -- the check and the
+    # mark are one SQLite statement, so two processes can never both win.
+    claim = getattr(seen, "claim", None)
     for candidate in source.fetch(limit):
-        if seen is not None:
-            if seen.has(candidate.source, candidate.id):
-                continue
-            seen.mark(candidate.source, candidate.id)
+        identity = (candidate.source, candidate.id)
+        if identity in seen_this_run:
+            continue  # W2-006: same-run duplicate
+        seen_this_run.add(identity)
+        if seen is not None and seen.has(candidate.source, candidate.id):
+            continue
         if not is_fresh(candidate, max_age_hours, now):
             continue
         if not is_subreddit_allowed(candidate.subreddit):
@@ -76,6 +95,12 @@ def scout(
         band = gate(relevance_score)
         if band == "ignore":
             continue
+        if claim is not None:
+            # Claim AFTER the gates: gate-dropped candidates stay
+            # reconsiderable because they were never claimed.
+            if not claim(candidate.source, candidate.id):
+                continue  # another process admitted it first
+            claimed.append(identity)
         queue.add(
             ReviewItem(
                 candidate=candidate,
@@ -83,8 +108,32 @@ def scout(
                 band=band,
                 draft="",  # filled in only once a human supplies a real solution
                 signals=dict(signals),
+                discovered=now,
             )
         )
+        admitted.append(identity)
+    if persist is not None:
+        try:
+            persist(queue, source)
+        except Exception:
+            # W2-001 durability ordering: nothing durable landed, so the
+            # claims are undone and every candidate stays reconsiderable.
+            if claim is not None:
+                for identity in claimed:
+                    seen.release(*identity)
+            raise
+    # W2-001: the FINAL seen commit happens only after the durable record
+    # (review store / report / outbox) landed. Provisional claims are now
+    # promoted to finalized seen records; a crash before this point left the
+    # candidate reconsiderable. A claim path with no persist callback (a
+    # degenerate caller) finalizes directly -- its claim is the only dedup
+    # record there is.
+    if claim is not None and claimed:
+        finalize = getattr(seen, "finalize_many", None)
+        if finalize is not None:
+            finalize(claimed)
+    elif seen is not None and claim is None:
+        seen.mark_many(admitted)
     return queue
 
 
@@ -156,10 +205,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     args = parser.parse_args(argv)
-    if args.since_hours is not None and args.since_hours < 0:
-        # Left unchecked this silently inverts the window: every dated
-        # candidate becomes "older than the cutoff" and the run finds nothing.
-        parser.error("--since-hours must not be negative (0 disables the window)")
+    if args.since_hours is not None:
+        import math
+        if not math.isfinite(args.since_hours) or args.since_hours < 0:
+            parser.error("--since-hours must be a finite number >= 0 (0 disables the window)")
     if args.limit < 1:
         parser.error("--limit must be at least 1")
     return args
@@ -225,10 +274,22 @@ def main(argv: list[str] | None = None, print_fn=print, input_fn=input) -> None:
     )
 
     seen = SeenStore("seen.json")
+    report_paths: dict = {}
+
+    def _persist(queue, source):
+        # The report is the durable record for a non-ReviewStore run: it must
+        # complete before scout() marks anything seen (W2-001).
+        report_paths["paths"] = write_report(
+            queue.pending(),
+            directory=args.report_dir,
+            failures=getattr(source, "last_failures", []),
+        )
+
     queue = scout(
         source,
         signal_fn=extract_signals,
         seen=seen,
+        persist=_persist,
         limit=args.limit,
         max_age_hours=max_age_hours,
     )
@@ -239,11 +300,7 @@ def main(argv: list[str] | None = None, print_fn=print, input_fn=input) -> None:
 
     print_fn(f"{len(queue.pending())} candidate(s) queued for review.")
 
-    paths = write_report(
-        queue.pending(),
-        directory=args.report_dir,
-        failures=getattr(source, "last_failures", []),
-    )
+    paths = report_paths["paths"]
     print_fn(f"report: {paths.jsonl} / {paths.markdown}")
 
     if args.report_only:

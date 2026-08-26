@@ -3,7 +3,24 @@ __pycache__/
 .pytest_cache/
 .venv/
 seen.json
+seen.json-wal
+seen.json-shm
 saipet.config.json
 runs/
 notifications.jsonl
 inbox.md
+monitor-status.json
+# v0.26/0.27 durable review/outbox/delivery state (CORE-010)
+review-state.json
+review-state.json.history.jsonl
+.review-state.json.lock
+review-state.json.index.sqlite
+review-state.json.index.sqlite-wal
+review-state.json.index.sqlite-shm
+notifications.outbox.json
+notifications.outbox.json-wal
+notifications.outbox.json-shm
+notifications.delivery.sqlite
+notifications.delivery.sqlite-wal
+notifications.delivery.sqlite-shm
+.monitor-status.json.lock

@@ -77,7 +77,7 @@ def test_a_control_character_stays_out_of_console_output():
     assert "\x07" not in lines[0]
 
 
-def test_raw_text_survives_intact_in_the_jsonl_feed():
+def test_raw_text_survives_intact_in_the_jsonl_feed(tmp_path):
     item = {
         "id": "t1",
         "subreddit": "testsub",
@@ -86,7 +86,7 @@ def test_raw_text_survives_intact_in_the_jsonl_feed():
         "score": 85.0,
         "band": "priority",
     }
-    file_sink = FileNotifier(path="notifications.jsonl")
+    file_sink = FileNotifier(path=tmp_path / "notifications.jsonl")
     file_sink.send(finding(item, NOW))
 
     record = json.loads(file_sink.path.read_text(encoding="utf-8").strip())

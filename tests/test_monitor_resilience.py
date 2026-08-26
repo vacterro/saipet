@@ -214,4 +214,8 @@ def test_a_throwing_sink_cannot_kill_the_loop(tmp_path):
     )
 
     assert state.cycles == 2
-    assert state.notified_total == 1  # counted as found even though delivery failed
+    # CORE-007: a failed delivery is not counted as a notification. The
+    # failure is surfaced instead of being swallowed.
+    assert state.notified_total == 0
+    assert state.notify_failed_total == 1
+    assert "sink is gone" in state.last_notify_error

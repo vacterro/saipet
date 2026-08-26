@@ -1,0 +1,17 @@
+{
+  "board_hash": "1d880936a3acc6f4",
+  "content_hash": "25d8bd048ca3e153",
+  "exit_code": 1,
+  "gate": "ship",
+  "kind": "conformance_receipt",
+  "log_hash": "c0013f31b9d43713",
+  "project_identity": "v:\\___vac\\__k\\__code\\_ai_stuff_agentic\\_saipet",
+  "receipt_id": "receipt-032b516e441f",
+  "schema_version": 2,
+  "source_head": "56f4a948f256122b24ea7136133b868049548383",
+  "source_tree_fingerprint": "git-delta-v1:81514f7ba1b24889fb09573cb93b0f8eb66c1fb8ee0fb01b35f3ed39b0e8582e",
+  "state_hash": "0e08f9efc73bbc8a",
+  "timestamp_utc": "2026-08-26T03:43:52.257373Z",
+  "validator_protocol_version": "1",
+  "verdict": "FAIL"
+}
