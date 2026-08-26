@@ -250,3 +250,4 @@
 - 26.08.26 03:33 [E-249] DEC: goal_tickets 1->2 -- T-028 completion (E-244) omitted its counter bump at write time; reconciling.
 - 26.08.26 03:34 [E-250] DEC: goal_tickets 2->3 -- T-033 completion (E-245) omitted its counter bump at write time; reconciling.
 - 26.08.26 03:48 [E-251] [parent: E-250] RUN: ship v0.28.0 -> first publish to github.com/vacterro/saipet (PUBLIC, user-created for the Reddit API application). 22 second-audit tickets (CORE-001..010, W2-001..006, PERF-001..006) + v0.27.0 tree; 472/472 tests green; VERSION/CHANGELOG/README aligned. Board: 27 prior + 22 new tickets to DONE; T-029/T-030 returned to TODO (unverified). Pre-existing .saipen debt noted: BOARD field format, old mangled LOG lines, validator phase-transition limitation (saipen ship from SCOUT).
+- 26.08.26 03:49 [E-252] [parent: E-251] RUN: pushed commit 29a7295, tag v0.28.0 -> github.com/vacterro/saipet (PUBLIC, first publish)

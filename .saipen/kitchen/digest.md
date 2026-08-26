@@ -1,3 +1,3 @@
-done: Audit acb-mt7tx0xp - 21 tickets T-034..T-054 complete (445 tests) - CORE/W2/PERF
-remaining: T-028 [DOING /] single-instance lock (SCOUT claimed 13:16Z) + T-031 hot-reload + T-032 AST scan + T-033 shadow eval - T-029/T-030 verify pending
-awaiting: user brake - run 'cc' to resume SCOUT T-028 + user commit/push local-only chain
+done: v0.28.0 shipped to github.com/vacterro/saipet (29a7295, tag v0.28.0) -- 22 audit tickets, 472/472 tests, first publish
+remaining: T-029/T-030 (unverified, returned to TODO); T-032 (AST security scan, deferred)
+awaiting: nothing
