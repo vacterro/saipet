@@ -1,18 +1,21 @@
+<div align="center">
+
 # SAIPET
 
-v0.28.0 -- see [CHANGELOG.md](CHANGELOG.md)
+**Read-only internet scout for finding real user problems, scoring relevance, and drafting solve-first replies for human review.**
 
-Read-only internet scout. Finds threads where people describe a real
-problem (symptom search, not brand search), scores relevance, drafts a
-solve-first reply, and stops for a human to approve before anything gets
-posted. Nothing in this codebase calls a submit/comment/post endpoint --
-posting, if it happens, is a manual action by the human outside this
-program.
+[![Version](https://img.shields.io/badge/version-0.28.0-D4B86A?style=flat-square)](VERSION)
+![Mode](https://img.shields.io/badge/mode-read%20only-4A7A20?style=flat-square)
+![Human review](https://img.shields.io/badge/posting-human%20only-6B5A2B?style=flat-square)
+![Python](https://img.shields.io/badge/Python-3.x-3776AB?style=flat-square&logo=python&logoColor=white)
 
-Reddit is the first source (`saipet/sources/reddit.py`, read-only OAuth
-script app, 100 req/min free tier, no auto-post). The core (`scorer.py`,
-`draft.py`, `review.py`) is source-agnostic so other platforms can plug in
-behind the same `Source` interface later.
+[Setup](#setup) · [Run](#run) · [Monitor](#leaving-it-running) · [Desktop GUI](#desktop-gui)
+
+</div>
+
+SAIPET searches for **symptoms and real problems**, not brand mentions. It can rank candidate threads and draft a useful answer, but this repository contains no automatic submit/comment/post path. Publishing remains an explicit human action.
+
+Reddit is the first source. The scoring, drafting, and review layers are source-agnostic so other read-only sources can be added behind the same interface.
 
 ## Setup
 
